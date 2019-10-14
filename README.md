@@ -53,7 +53,7 @@ The genome aligner BWA (http://bio-bwa.sourceforge.net) and SMALT (http://www.sa
              length:       minimum contig length considering for scaffolding [ default = 500000 ]
 
 
-#### view HiC map:
+#### View HiC map:
            PretextView is a desktop application for viewing pretext contact maps
            
 	   $ /full/path/to/scaffHiC/src/seqbin-bin/PretextView genome-hic.map \

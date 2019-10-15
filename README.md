@@ -55,7 +55,8 @@ The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compil
 
 
 #### View HiC map:
-           PretextView is a desktop application for viewing pretext contact maps and it has linux and Mac versions.
+           PretextView is a desktop application for viewing pretext contact maps
+           The package has different linux and Mac versions (linux version included in scaffHiC)
            
 	   $ /full/path/to/scaffHiC/src/seqbin-bin/PretextView genome-hic.map \
 	    

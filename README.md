@@ -61,7 +61,8 @@ The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compil
 	   $ /full/path/to/scaffHiC/src/seqbin-bin/PretextView genome-hic.map \
 	    
            More information, go to https://github.com/wtsi-hpag/PretextView
-        
+
+
 #### Run scaffHiC on new parameter settings with alignment file align.dat:
            $ /full/path/to/scaffHiC/src/scaffHiC -nodes <nodes> -score <score> \
 	   	 -depth <depth_of_matrix> -length <contig_length> \
@@ -70,3 +71,21 @@ The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compil
           
            This saves alignment time and can get the results quickly. 
 
+
+#### Example if you have an assembly and HiC read files 
+##### genome_assembly.fasta  GM12878-HiC_1.fastq.gz GM12878-HiC_2.fastq.gz 
+           $ /full/path/to/scaffHiC/src/scaffHiC -nodes 30 -score 200 -depth 50 -length 500000 \
+                 genome_assembly.fasta GM12878-HiC_1.fastq.gz GM12878-HiC_2.fastq.gz genome-scaffhic.fasta \
+          
+           $ /full/path/to/scaffHiC/src/scaffHiC -nodes 30 -score 200 -depth 50 -length 500000 \
+                 -map genome-hic.map -plot genome-hic-length.png -file 0 \
+                 genome-scaffhic.fasta GM12878-HiC_1.fastq.gz GM12878-HiC_2.fastq.gz genome-hic2.fasta \
+          
+           You now have  \
+              1. Scaffolded assembly file genome-scaffhic.fasta; \
+              2. HiC map genome-hic.map; \ 
+              3. HiC length distribution image genome-hic-length.png 
+
+          To view it on a desktop linux or Mac laptop use PretextView https://github.com/wtsi-hpag/PretextView  \
+          $ ./PretextView genome-hic.map 
+        

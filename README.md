@@ -81,10 +81,10 @@ The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compil
                  -map genome-hic.map -plot genome-hic-length.png -file 0 \
                  genome-scaffhic.fasta GM12878-HiC_1.fastq.gz GM12878-HiC_2.fastq.gz genome-hic2.fasta \
           
-           You now have  
-              1. Scaffolded assembly file genome-scaffhic.fasta; 
-              2. HiC map genome-hic.map;  
-              3. HiC length distribution image genome-hic-length.png 
+           After the above two steps, You now have  
+              1. Scaffolded assembly file: genome-scaffhic.fasta; 
+              2. HiC map: genome-hic.map;  
+              3. HiC length distribution image: genome-hic-length.png 
               4. Assembly file produced in the visualization step:  genome-hic2.fasta 
                  This file is not used, but it might be slightly better than genome-scaffhic.fasta 
                  The visualization results are based on genome-scaffhic.fasta 

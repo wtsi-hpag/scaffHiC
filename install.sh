@@ -82,7 +82,7 @@ fi
 
 ### Download and install PretextMap  ######
 
-echo "Downloading and installing PretextMap/PretextView"
+echo "Downloading and installing PretextMap"
 if [[ ! -s $bindir/PretextMap ]]; then
 
     if [[ ! -d $projdir/src/PretextMap ]]; then

@@ -25,7 +25,11 @@ If everything compiled successfully you must see the final comment:
 
 
 #### External packages
-The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compiled by scaffHiC.
+The genome aligner BWA (http://bio-bwa.sourceforge.net) is downloaded and compiled by scaffHiC
+The compression code pigz (https://github.com/madler/pigz) is downloaded and compiled by scaffHiC
+The HiC map builder PretextMap (https://github.com/wtsi-hpag/PretextMap) is downloaded by scaffHiC
+The HiC map viewer PretextView (https://github.com/wtsi-hpag/PretextView) is downloaded by scaffHiC
+
 
 ### Run the pipelines
 

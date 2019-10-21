@@ -80,6 +80,102 @@ else
     rm -rf $projdir/src/pigz/
 fi
 
+### Download and install PretextMap/PretextView  ######
+
+echo "Downloading and installing PretextMap/PretextView"
+if [[ ! -s $bindir/PretextMap ]]; then
+
+    if [[ ! -d $projdir/src/PretextMap ]]; then
+	cd $projdir/src/
+        wget -r -np -nd https://github.com/wtsi-hpag/PretextMap/releases/download/0.0.41/PretextMap_Linux-x86-64.zip &> $projdir/src/log/Pretext_wetmap.log
+        unzip PretextMap_Linux-x86-64.zip &> $projdir/src/log/Pretext_unzip.log
+        rm -f PretextMap_Linux-x86-64.zip 
+    fi
+
+    cp PretextMap $bindir
+fi
+
+if  [[ ! -s $bindir/PretextMap ]]; then
+    echo " !! Error: PretextMap not installed properly!"; 
+    echo "   Please check the log files:" 
+    echo "   Check if PretextMap was downloaded properly:" $projdir/src/log/pigz_cloning.log 
+
+    # Cleaning up
+    cd $projdir/src
+    rm -rf $bindir/PretextMap 
+    
+    errs=$(($errs+1))
+else
+    echo " PretextMap succesfully installed!"
+    rm -rf $projdir/src/PretextMap/
+fi
+
+##### Download and install PretextView ######
+
+echo "Downloading and installing PretextView"
+if [[ ! -s $bindir/PretextView ]]; then
+
+    if [[ ! -d $projdir/src/PretextView ]]; then
+	cd $projdir/src/
+        wget -r -np -nd https://github.com/wtsi-hpag/PretextView/releases/download/0.0.41/PretextView-Linux-x86-64.zip &> $projdir/src/log/PretextView_wget.log
+        unzip PretextView-Linux-x86-64.zip &> $projdir/src/log/PretextView_unzip.log
+        rm -f PretextView-Linux-x86-64.zip 
+    fi
+
+    cp PretextView $bindir
+fi
+
+if  [[ ! -s $bindir/PretextView ]]; then
+    echo " !! Error: PretextView not installed properly!"; 
+    echo "   Please check the log files:" 
+    echo "   Check if PretextView was downloaded properly:" $projdir/src/log/PretextView_wget.log 
+
+    # Cleaning up
+    cd $projdir/src
+    rm -rf $bindir/PretextView 
+    
+    errs=$(($errs+1))
+else
+    echo " pigz succesfully installed!"
+    rm -rf $projdir/src/PretextView/
+fi
+
+##### Download and install pigz ######
+
+echo "Downloading and installing pigz"
+if [[ ! -s $bindir/pigz ]]; then
+
+    if [[ ! -d $projdir/src/pigz ]]; then
+	cd $projdir/src/
+        wget -r -np -nd https://zlib.net/pigz/pigz-2.4.tar.gz &> $projdir/src/log/pigz_wget.log
+        tar -xvzf pigz-2.4.tar.gz &> $projdir/src/log/pigz_untar.log
+        rm -f pigz-2.4.tar.gz
+    fi
+
+    if [[ ! -s $projdir/src/pigz/pigz ]]; then
+	cd $projdir/src/pigz-2.4
+	make &> $projdir/src/log/pigz_installation.log
+    fi
+
+    cp pigz $bindir
+fi
+
+if  [[ ! -s $bindir/pigz ]]; then
+    echo " !! Error: pigz not installed properly!"; 
+    echo "   Please check the log files:" 
+    echo "   Check if bwa was downloaded properly:" $projdir/src/log/pigz_cloning.log 
+    echo "   Check if the bwa was compiled properly:" $projdir/src/log/pigz_installation.log
+
+    # Cleaning up
+    cd $projdir/src
+    rm -rf $projdir/src/pigz/pigz $bindir/pigz 
+    
+    errs=$(($errs+1))
+else
+    echo " pigz succesfully installed!"
+    rm -rf $projdir/src/pigz/
+fi
+
 ###### Compile scaffHiC sources ######
 
 echo; echo "Compiling scaffHiC sources"

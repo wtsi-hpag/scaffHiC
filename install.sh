@@ -80,7 +80,7 @@ else
     rm -rf $projdir/src/pigz/
 fi
 
-### Download and install PretextMap/PretextView  ######
+### Download and install PretextMap  ######
 
 echo "Downloading and installing PretextMap/PretextView"
 if [[ ! -s $bindir/PretextMap ]]; then
@@ -92,6 +92,7 @@ if [[ ! -s $bindir/PretextMap ]]; then
         rm -f PretextMap_Linux-x86-64.zip 
     fi
 
+    chmod 755 PretextMap
     cp PretextMap $bindir
 fi
 
@@ -122,6 +123,7 @@ if [[ ! -s $bindir/PretextView ]]; then
         rm -f PretextView-Linux-x86-64.zip 
     fi
 
+    chmod 755 PretextView
     cp PretextView $bindir
 fi
 

@@ -1,5 +1,5 @@
-# scaffhic v1.0
-Pipeline for genome scaffolding by modelling distributions of HiC pairs.
+# scaffhic v1.1
+Pipeline for genome scaffolding by modelling distributions of HiC pairs. Also breakhic is added to the pipeline.
 
 Pipeline steps:
         
@@ -120,22 +120,22 @@ The HiC map viewer PretextView (https://github.com/wtsi-hpag/PretextView) is dow
               1. Assembly file with broken contigs: genome-break.fasta
               2. Breakpoint information file: genome-break.fasta.brk
 
-Break1: 70 547700 217464711 3156 5 0
-Break1: 70 854600 217464711 3447 5 0
-Break1: 70 1155600 217464711 2736 6 0
-Break2: 70 119259859 217464711 3431 5 200
-Break2: 117 1340007 72126970 389 38 200
-Break2: 117 4228188 72126970 1157 12 200
-Break2: 117 28301466 72126970 556 26 200
-Break1: 118 46043000 76603601 1388 9 0
-Break2: 118 60007606 76603601 179 60 200
-Break2: 118 69709038 76603601 116 60 200
+Break1: 70 547700 217464711 3156 5 0      \
+Break1: 70 854600 217464711 3447 5 0      \
+Break1: 70 1155600 217464711 2736 6 0     \
+Break2: 70 119259859 217464711 3431 5 200 \
+Break2: 117 1340007 72126970 389 38 200   \
+Break2: 117 4228188 72126970 1157 12 200  \
+Break2: 117 28301466 72126970 556 26 200  \
+Break1: 118 46043000 76603601 1388 9 0    \
+Break2: 118 60007606 76603601 179 60 200  \
+Break2: 118 69709038 76603601 116 60 200  \
 
-2 - Contig/scaffold index;
-3 - Breakpoint offset;
-4 - Contig/scaffold length;
-5 - Average HiC coverage;
-6 - Break likelihood value QV;
-7 - Breakpoint nature: contig break (0); scaffold break (200)
+2 - Contig/scaffold index;     \
+3 - Breakpoint offset;         \
+4 - Contig/scaffold length;    \
+5 - Average HiC coverage;      \
+6 - Break likelihood value QV; \
+7 - Breakpoint nature: contig break (0); scaffold break or break at a gap (200) \
  
 

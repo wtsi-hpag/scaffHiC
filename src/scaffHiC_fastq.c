@@ -94,7 +94,7 @@ int main(int argc, char **argv)
     int i,j,nSeq,args,qthresh=0;
     int nseq,kick_flag = 0;
     fasta *seq,*seqp;
-    char ctgname[30];
+    char ctgname[30] = "tarseq";
     void decodeReadpair(int nSeq);
     void HashFasta_Head(int i, int nSeq);
     void HashFasta_Table(int i, int nSeq);

@@ -51,14 +51,14 @@ static int *hit_locus,*hit_index,*hit_score,*hit_tagcode,*ctg_index,*ctg_length;
 static int IMOD=0;
 static int n_type=0;
 static int barreads=5;
-static int file_flag=2;
+static int file_flag=1;
 static int tiles_flag=0;
 static int block_set=2500;
 static int edge_flag=0;
 static int nContig=0;
 static long G_Size = 0;
 static int n_lenn = 14;
-static int max_len = 100000;
+static int n_chr = 22;
 typedef struct
 {
        int foffset;
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 
     if(argc < 2)
     {
-      printf("Usage: %s [-block 2500] [-reads 10] <input_barcode_file> <barcode_sorted_file>\n",argv[0]);
+      printf("Usage: %s <tarseq.tag> <align.dat>\n",argv[0]);
 
       exit(1);
     }
@@ -121,9 +121,9 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&barreads);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-max"))
+       else if(!strcmp(argv[i],"-chr"))
        {
-         sscanf(argv[++i],"%d",&max_len);
+         sscanf(argv[++i],"%d",&n_chr);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-file"))
@@ -245,11 +245,11 @@ int main(int argc, char **argv)
 
     n_reads=i;
 //    Readname_match(seq,argv,args,n_reads,nRead);
-    printf("Contigs %d %d\n",nContig,n_reads);
+//    printf("Contigs %d %d\n",nContig,n_reads);
     Mapping_Process(argv,args,n_reads);
 //    Read_Pairs(argv,args,seq,n_reads);
 
-    printf("Job finished for %d reads!\n",nSeq);
+//    printf("Job finished for %d reads!\n",nSeq);
     return EXIT_SUCCESS;
 
 }
@@ -362,14 +362,18 @@ void Mapping_Process(char **argv,int args,int nSeq)
      }
 
      num_trans = num_pairs - num_inchr;
-     printf("Translocation %d %d %d %d %d %d\n",nSeq,num_inchr,num_trans,num_sends,num_reads,num_pairs);
+     if(file_flag == 0)
+       printf("Translocation %d %d %d %d %d %d\n",nSeq,num_inchr,num_trans,num_sends,num_reads,num_pairs);
      rate1 = num_trans;
      rate1 = rate1/num_pairs;
      rate2 = num_reads - num_pairs;
      rate2 = rate2/num_reads;
-     printf("Translocation rate: %d %d %f %d %d %f\n",num_trans,num_pairs,rate1,num_reads-num_pairs,num_reads,rate2);
-     printf("\n");
-     for(i=0;i<32;i++)
+     if(file_flag == 0)
+     {
+       printf("Translocation rate: %d %d %f %d %d %f\n",num_trans,num_pairs,rate1,num_reads-num_pairs,num_reads,rate2);
+       printf("\n");
+     }
+     for(i=0;i<n_chr;i++)
      {
         rate1 = chr_trans[i];
         if((ctg_length[i] == 0)||(chr_rdhit[i] == 0))
@@ -388,7 +392,10 @@ void Mapping_Process(char **argv,int args,int nSeq)
           rate3 = rate3/chr_rdhit[i];
           rate3 = rate3*0.5;
         }
-        printf("Translocation chromosome: %d %d %d %d %f %d %f\n",i+1,chr_trans[i],chr_inchr[i],ctg_length[i],rate1,chr_rdhit[i],rate3);
+        if(file_flag == 1)
+          printf("%d %f\n",i+1,rate1);
+        else
+          printf("Translocation chromosome: %d %d %d %d %f %d %f\n",i+1,chr_trans[i],chr_inchr[i],ctg_length[i],rate1,chr_rdhit[i],rate3);
      }
 }
 

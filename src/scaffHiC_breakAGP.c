@@ -1,13 +1,13 @@
 /****************************************************************************
  ****************************************************************************
  *                                                                          *
- *  Copyright (C) 2018  Genome Research Ltd.                                *
+ *  Copyright (C) 2017  Genome Research Ltd.                                *
  *                                                                          *
  *  Author: Zemin Ning (zn1@sanger.ac.uk)                                   *
  *                                                                          *
- *  This file is part of ScaffHiC pipeline.                                 *
+ *  This file is part of scaff10x pipeline.                                 *
  *                                                                          *
- *  ScaffHiC is a free software: you can redistribute it and/or modify it   *
+ *  Scaff10x is a free software: you can redistribute it and/or modify it   *
  *  under the terms of the GNU General Public License as published by the   *
  *  Free Software Foundation, either version 3 of the License, or (at your  *
  *  option) any later version.                                              *
@@ -34,6 +34,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <ctype.h>
+#include "fasta.h"
 
 #define GT '>'
 #define GT4 (((((GT<<8)+GT)<<8)+GT)<<8)+GT
@@ -42,37 +43,101 @@
 #define PADCHAR '-'
 #define MAX_N_BRG 50000 
 #define MAX_N_ROW 50000 
-#define Max_N_NameBase 60 
+#define Max_N_NameBase 60
 #define Max_N_Pair 100
-static char **S_Name;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+static char **S_Name,**R_Name,**R_Name2,**T_Name,**cellname;
+static int *break_index,*break_locus,*break_locus2,*break_tags,*break_gaplen,*break_score,*break_masks;
+static int *break_offset;
 
 /* SSAS default parameters   */
 static int IMOD=0;
 static int n_type=0;
-static int barreads=10;
 static int file_flag=2;
 static int tiles_flag=0;
 static int block_set=2500;
 static int edge_flag=0;
 static int mpscore=20;
 static int nContig=0;
-static int n_lenn = 14;
+static int gap_len = 100;
 static int max_len = 100000;
+typedef struct
+{
+       int foffset;
+       int fsindex;
+} SIO;
+
+fasta *expt;
+
+static char rc_char[500000];
+static char rc_sub[5000];
+
+int ReverseComplement(int seqdex)
+{
+        int i,len;
+        char *tp,*dp;
+        fasta *seqp;
+
+        seqp=expt+seqdex;
+        len=seqp->length;
+        memset(rc_sub,'\0',5000);
+        dp=rc_sub;      
+        tp = seqp->data+len;
+        for(i=len;--i>=0;)
+        {
+                int tmp = *--tp;
+                if     (tmp == 't') *dp++ = 'a';
+                else if(tmp == 'g') *dp++ = 'c';
+                else if(tmp == 'c') *dp++ = 'g';
+                else if(tmp == 'a') *dp++ = 't';
+                else                *dp++ = tmp;
+        }
+        return(0);
+}
+
+
+int Reverse_Complement_Contig(char c_array[],int num_len)
+{
+        int i,len;
+        char *tp,*dp;
+
+        len=num_len;
+        dp=rc_char;
+        tp = c_array+len;
+        for(i=len;--i>=0;)
+        {
+                int tmp = *--tp;
+                if     (tmp == 't') *dp++ = 'a';
+                else if(tmp == 'g') *dp++ = 'c';
+                else if(tmp == 'c') *dp++ = 'g';
+                else if(tmp == 'a') *dp++ = 't';
+                else                *dp++ = tmp;
+        }
+        return(0);
+}
+
 
 int main(int argc, char **argv)
 {
     FILE *namef;
     int i,j,nSeq,args;
     int n_contig,n_reads,n_readsMaxctg,nseq;
-    void Mapping_Process(char **argv,int args,int nSeq);
+    fasta *seq;
+    void decodeReadpair(int nSeq);
+    void HashFasta_Head(int i, int nSeq);
+    void HashFasta_Table(int i, int nSeq);
+    void Search_SM(fasta *seq,int nSeq);
+    void Assemble_SM(int arr,int brr);
+    void Readname_match(fasta *seq,char **argv,int args,int nSeq,int nRead);
+    void Mapping_Process(char **argv,int args,int nRead);
     void Memory_Allocate(int arr);
-    char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
+    char line[2000]={0},tempc1[60],cc[60],RC[2],readname[60],*st,*ed;
     char **cmatrix(long nrl,long nrh,long ncl,long nch);
+    void Read_Pairs(char **argv,int args,fasta *seq,int nSeq);
 
+    seq=NULL;
     if(argc < 2)
     {
-      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
+      printf("Usage: %s [-gap 100] <input_break_file> <output_break_file>\n",argv[0]);
 
       exit(1);
     }
@@ -102,9 +167,9 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&tiles_flag);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-reads"))
+       else if(!strcmp(argv[i],"-gap"))
        {
-         sscanf(argv[++i],"%d",&barreads);
+         sscanf(argv[++i],"%d",&gap_len);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-score"))
@@ -134,42 +199,55 @@ int main(int argc, char **argv)
     {
       if(fgets(line,2000,namef) == NULL)
       {
-//       printf("fgets command error:\n);
+//        printf("fgets command error:\n);
       }
       if(feof(namef)) break;
       nseq++;
     }
     fclose(namef); 
    
-/*
-    nRead=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
+    if((break_index = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("ERROR main:: args+1 \n");
+      printf("fmate: calloc - gap_locus2\n");
       exit(1);
     }
-    while(!feof(namef))
+    if((break_locus = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      fgets(line,2000,namef);
-      if(feof(namef)) break;
-      nRead++;
-    }
-    fclose(namef);   */ 
-
-    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
+      printf("fmate: calloc - gap_locus2\n");
       exit(1);
     }
-    if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
+    if((break_locus2 = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("fmate: calloc - hit_locus2\n");
+      printf("fmate: calloc - gap_locus\n");
+      exit(1);
+    }
+    if((break_offset = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - gap_locus\n");
+      exit(1);
+    }
+    if((break_tags = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - gap_locus2\n");
+      exit(1);
+    }
+    if((break_gaplen = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - gap_locus2\n");
+      exit(1);
+    }
+    if((break_score = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - gap_locus2\n");
+      exit(1);
+    }
+    if((break_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - gap_locus2\n");
       exit(1);
     }
 
     nSeq=nseq;
-    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    n_readsMaxctg=0;
     n_contig=0;
     n_reads=0;
 
@@ -179,40 +257,24 @@ int main(int argc, char **argv)
       exit(1);
     }
 
-/*  read the alignment files         */
+/*  read the break file         */
     i=0;
-    while(fscanf(namef,"%s %s %s %s %s %s",tmpname,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
+    while(fscanf(namef,"%s %d %d %d %d %d",readname,&break_index[i],&break_locus[i],&break_locus2[i],&break_gaplen[i],&break_score[i])!=EOF)
     {
-        int idt;
-        st = readname;
-        ed= strrchr(readname,'_');
-        memset(tmpname,'\0',60);
-        strcpy(tmpname,ed);
-        strcat(lociname,tmpname);
-        strcat(lociname,"-");
-        idt = atoi(ed+1);
-        j = i/2;
-        if((i%2) == 0)
-        {
-          strcpy(S_Name[j],lociname);  
-        }
-        else
-        {
-          strcat(S_Name[j],lociname);
-          readIndex[j] = j;
-//    printf("%d %s %s %s\n",j,S_Name[j],lociname,readname);
-        }
+      if((strncmp(readname,"Break",5))==0)
+        break_tags[i] = 1;
+      else
+        break_tags[i] = 0;  
+//    printf("%s %d %d %d %d\n",readname,break_index[i],break_locus[i],break_locus2[i],break_gaplen[i]);
         i++;
     }
     fclose(namef);
 
-
-    n_reads=i/2;
 //    Readname_match(seq,argv,args,n_reads,nRead);
-    Mapping_Process(argv,args,n_reads);
+    Mapping_Process(argv,args,nSeq);
 //    Read_Pairs(argv,args,seq,n_reads);
 
+    printf("Job finished for %d reads!\n",nSeq);
     return EXIT_SUCCESS;
 
 }
@@ -220,78 +282,138 @@ int main(int argc, char **argv)
 
 /*   subroutine to sort out read pairs    */
 /* =============================== */
-void Mapping_Process(char **argv,int args,int nSeq)
+void Mapping_Process(char **argv,int args,int n_Breaks)
 /* =============================== */
 {
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
-     FILE *namef,*namef2;
-     char line[2000];
-     void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
-     ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
-     num_hits =0;
+     int i,j,k,m,n;
+     int num_hits,hit_ray[5000];
+     int stopflag,breakflag;
+     int offset,mscore;
+     long *hit_array;
+     FILE *namef;
+     void ArraySort_Mix(int n, long *arr, int *brr);
+     char **DBname,RC[2];
+     void ArraySort_Int2(int n, int *arr, int *brr);
+     char **cmatrix(long nrl,long nrh,long ncl,long nch);
+
      k = 0;
-     n_uniqs = 0;
-     for(i=0;i<(nSeq-1);i++)
+     offset = 0;
+     for(i=0;i<n_Breaks;i++)
      {
         stopflag=0;
         j=i+1;
-        while((j<nSeq)&&(stopflag==0))
+        while((j<n_Breaks)&&(stopflag==0))
         {
-          if(strcmp(S_Name[i],S_Name[j])==0)
+          if(break_index[j]==break_index[i])
           {
             j++;
           }
           else
             stopflag=1;
         }
-        k = readIndex[i];
         num_hits = j-i;
-        if(num_hits>=2) 
+        breakflag = 0;
+        for(n=i;n<j;n++)
         {
-          n_uniqs++;
-	  for(n=(i+1);n<j;n++)
+           if(break_tags[n]==1)
+           {
+             breakflag++;
+             break_masks[n] = 0;
+           }
+           else
+             break_masks[n] = 2;
+        }
+       printf("www: %d %d %d %d %d\n",i,breakflag,num_hits,break_locus[n],break_locus2[n]);
+        if((breakflag!=num_hits)&&(num_hits>=2)) 
+        {
+          int stopflag2,num_hit2;
+          int dif_offset = 8000;
+
+	  for(n=i;n<j;n++)
 	  {
-             int idd = 2*readIndex[n];
-             hit_masks[idd] = 1;
-             hit_masks[idd+1] = 1;
+             if(break_tags[n]==1)
+             {
+               if(n==i)
+               {
+                 if((break_tags[n+1]==0)&&(abs(break_locus[n+1]-break_locus[n])<dif_offset))
+                 {
+       printf("Filter1: %d %d %d\n",n,break_locus[n],break_locus2[n]);
+                   if(break_gaplen[n+1] == gap_len)
+                     break_masks[n] = 1;
+                   else
+                     break_masks[n] = 2;
+                   break_offset[n] = break_locus[n+1];
+                 }
+               }
+               else if(n==(j-1))
+               {
+                 if((break_tags[j-2]==0)&&(abs(break_locus[j-2]-break_locus[n])<dif_offset))
+                 {
+       printf("Filter2: %d %d %d\n",n,break_locus[n],break_locus2[n]);
+                   if(break_gaplen[j-2] == gap_len)
+                     break_masks[n] = 1;
+                   else
+                     break_masks[n] = 2;
+                   break_offset[n] = break_locus[j-2];
+                 }
+               }
+               else
+               {
+                 int lsize,rsize;
+ 
+                 lsize = abs(break_locus[n]-break_locus[n-1]);
+                 rsize = abs(break_locus[n+1]-break_locus[n]);
+       printf("Filter5: %d %d %d %d %d\n",n,break_locus[n]-break_locus[n-1],break_locus[n+1]-break_locus[n],lsize,rsize);
+                 if(lsize > rsize)
+                 {
+                   if((break_tags[n+1]==0)&&(abs(break_locus[n+1]-break_locus[n])<dif_offset))
+                   {
+       printf("Filter3: %d %d %d %d\n",n,break_locus[n],break_locus[n+1],gap_len);
+                     if(break_gaplen[n+1] == gap_len)
+                       break_masks[n] = 1;
+                     else
+                       break_masks[n] = 2;
+                     break_offset[n] = break_locus[n+1];
+                   }
+                 }
+                 else
+                 {
+                   if((break_tags[n-1]==0)&&(abs(break_locus[n]-break_locus[n-1])<dif_offset))
+                   {
+       printf("Filter4: %d %d %d %d\n",n,break_locus[n],break_locus[n-1],gap_len);
+                     if(break_gaplen[n-1] == gap_len)
+                       break_masks[n] = 1;
+                     else
+                       break_masks[n] = 2;
+                     break_offset[n] = break_locus[n-1];
+                   }
+                 }
+               }
+             }
           }
         }
         else
         {
-          n_uniqs++;
         }
         i=j-1;
      }
-
-     if((namef = fopen(argv[args],"r")) == NULL)
+     if((namef = fopen(argv[args+1],"w")) == NULL)
      {
        printf("ERROR main:: reads group file \n");
        exit(1);
      }
-     if((namef2 = fopen(argv[args+1],"w")) == NULL)
+     for(i=0;i<n_Breaks;i++)
      {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-
-     i=0;
-     while(!feof(namef))
-     {
-       if(fgets(line,2000,namef) == NULL)
-       {
-//        printf("fgets command error:\n);
-       }
-       if(feof(namef)) break;
-       if(hit_masks[i] == 0)
-         fprintf(namef2,"%s",line);
-       i++;
+        if(break_masks[i] == 0)
+        {
+          fprintf(namef,"Break1: %d %d %d %d %d 0\n",break_index[i],break_locus[i],break_locus2[i],break_gaplen[i],break_score[i]);
+        }
+        else if(break_masks[i] == 1)
+        {
+          fprintf(namef,"Break2: %d %d %d %d %d %d\n",break_index[i],break_offset[i],break_locus2[i],break_gaplen[i],break_score[i],gap_len);
+        }
      }
      fclose(namef);
-     fclose(namef2);
-     printf("Masked reads %d %d %d\n",i,nSeq,n_uniqs);
 }
 
 

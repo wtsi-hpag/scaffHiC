@@ -229,7 +229,10 @@ int main(int argc, char **argv)
     }
     while(!feof(namef))
     {
-      fgets(line,2000,namef);
+       if(fgets(line,2000,namef) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
       if(feof(namef)) break;
       nRead++;
     }
@@ -278,11 +281,11 @@ int main(int argc, char **argv)
           else
             RC[0] = '-'; 
 //          printf("scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',S_Name[ctg_id2id[idd1]],1,ctg_length[idd1],RC);
-          fprintf(fpOutfast,"scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',S_Name[ctg_scflen[idd]],1,ctg_length[idd],RC);
+          fprintf(fpOutfast,"scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',S_Name[ctg_index[idd]],1,ctg_length[idd],RC);
           i_contig++;
           if(j < (ctg_list[i]-1))
           {
-            fprintf(fpOutfast,"scaffHiC_%d\t\%d\t%d\t%d\t%c\t%d\t%d\t%d\t%s\n",n_scaff,offset+1,offset+Max_Gap,i_contig,'N',ctg_gaplen[idd],ctg_mscore[idd],ctg_scflen[idd],"HiC");
+            fprintf(fpOutfast,"scaffHiC_%d\t\%d\t%d\t%d\t%c\t%d\t%d\t%d\t%s\n",n_scaff,offset+1,offset+Max_Gap,i_contig,'N',ctg_gaplen[idd],ctg_mscore[idd],ctg_index[idd],"HiC");
             offset = offset + Max_Gap;
           }
           start = offset;

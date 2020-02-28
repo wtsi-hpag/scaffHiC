@@ -53,7 +53,7 @@ static int i_getindex = 2;
 int main(int argc, char **argv)
 {
     FILE *namef;
-    int i,nSeq,args,idt;
+    int i,j,nSeq,args,idt;
     int n_contig,n_reads,nseq;
     void Matrix_Process(char **argv,int args,int nSeq);
     char *st,*ed;
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 
 
     fflush(stdout);
-    if(system("ps aux | grep scaffHiC_pmatrix; date") == -1)
+    if(system("ps aux | grep scaffHiC_PCRdup3; date") == -1)
     {
 //        printf("System command error:\n);
     }
@@ -127,6 +127,8 @@ int main(int argc, char **argv)
     }
     fclose(namef); 
 
+    nContig = 2*nseq;
+
     if((hit_rddex = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
       printf("fmate: calloc - insert\n");
@@ -140,11 +142,6 @@ int main(int argc, char **argv)
     if((hit_locus1 = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
       printf("fmate: calloc - hit_locus1\n");
-      exit(1);
-    }
-    if((ctg_length = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_length\n");
       exit(1);
     }
     if((superlength = (int *)calloc(nseq,sizeof(int))) == NULL)
@@ -186,13 +183,21 @@ int main(int argc, char **argv)
         idt = atoi(ed+1);
         if(idt > max_ctg)
           max_ctg = idt;
-        ctg_length[idt] = superlength[i];
+//        ctg_length[idt] = superlength[i];
         hit_index[i] = idt;
         i++;
     }
     fclose(namef);
 
     n_reads=i;
+
+    if((ctg_length = (int *)calloc(max_ctg+2000,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - ctg_length\n");
+      exit(1);
+    }
+    for(j=0;j<n_reads;j++)
+       ctg_length[hit_index[j]] = superlength[i];
      
     Matrix_Process(argv,args,n_reads);
 
@@ -538,7 +543,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
         ctg_rcdex1[i] = -1;
      }
 
-     num_cells = num_cells + 20000;
+     num_cells = num_cells + num_cells;
      head_locus[0] = 0;
      for(ii=1;ii<n_blocks;ii++)
      {

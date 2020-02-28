@@ -1,13 +1,13 @@
 /****************************************************************************
  ****************************************************************************
  *                                                                          *
- *  Copyright (C) 2018  Genome Research Ltd.                                *
+ *  Copyright (C) 2020  Genome Research Ltd.                                *
  *                                                                          *
  *  Author: Zemin Ning (zn1@sanger.ac.uk)                                   *
  *                                                                          *
- *  This file is part of ScaffHiC pipeline.                                 *
+ *  This file is part of scaffhic pipeline.                                 *
  *                                                                          *
- *  ScaffHiC is a free software: you can redistribute it and/or modify it   *
+ *  Scaff10x is a free software: you can redistribute it and/or modify it   *
  *  under the terms of the GNU General Public License as published by the   *
  *  Free Software Foundation, either version 3 of the License, or (at your  *
  *  option) any later version.                                              *
@@ -23,9 +23,7 @@
  ****************************************************************************
  ****************************************************************************/
 /****************************************************************************/
-
-
-
+ 
 #include <math.h>
 #include <values.h>
 #include <stdio.h>
@@ -34,6 +32,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <ctype.h>
+#include "fasta.h"
 
 #define GT '>'
 #define GT4 (((((GT<<8)+GT)<<8)+GT)<<8)+GT
@@ -41,39 +40,80 @@
 #define ENDS_EXTRA 0
 #define PADCHAR '-'
 #define MAX_N_BRG 50000 
-#define MAX_N_ROW 50000 
-#define Max_N_NameBase 60 
+#define MAX_N_ROW 40000 
+#define nfm 800000
+#define nfm_sub 500000
+#define Max_N_NameBase 60
 #define Max_N_Pair 100
-static char **S_Name;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+static long *h_dna;
 
 /* SSAS default parameters   */
 static int IMOD=0;
-static int n_type=0;
-static int barreads=10;
-static int file_flag=2;
-static int tiles_flag=0;
-static int block_set=2500;
-static int edge_flag=0;
-static int mpscore=20;
-static int nContig=0;
-static int n_lenn = 14;
-static int max_len = 100000;
+static int set_qual=15;
+static int set_len=10;
+
+typedef struct
+{
+       int foffset;
+       int fsindex;
+} SIO;
+
+static fasta **expp;
+fasta *expt;
+
+static char rc_char[500000];
+static char rc_sub[5000];
+
+int ReverseComplement(int seqdex)
+{
+        int i,len;
+        char *tp,*dp;
+        fasta *seqp;
+
+        seqp=expt+seqdex;
+        len=seqp->length;
+        memset(rc_sub,'\0',5000);
+        dp=rc_sub;      
+        tp = seqp->data+len;
+        for(i=len;--i>=0;)
+        {
+                int tmp = *--tp;
+                if     (tmp == 't') *dp++ = 'a';
+                else if(tmp == 'g') *dp++ = 'c';
+                else if(tmp == 'c') *dp++ = 'g';
+                else if(tmp == 'a') *dp++ = 't';
+                else                *dp++ = tmp;
+        }
+        return(0);
+}
 
 int main(int argc, char **argv)
 {
-    FILE *namef;
-    int i,j,nSeq,args;
-    int n_contig,n_reads,n_readsMaxctg,nseq;
-    void Mapping_Process(char **argv,int args,int nSeq);
+    FILE *fp,*namef,*namef2,*fpOutfast,*fpOutfast2;
+    long dataSize,totalBases;
+    int i,j,k,nSeq,args,qthresh=0;
+    int n_contig,offset,n_Ns,i_contig;
+    int iseq,kick_flag = 0;
+    fasta *seq,*seqp;
+    char ctgname[30],outName[200];
+    void decodeReadpair(int nSeq);
+    void HashFasta_Head(int i, int nSeq);
+    void HashFasta_Table(int i, int nSeq);
+    void Search_SM(fasta *seq,int nSeq);
+    void Assemble_SM(int arr,int brr);
+    void Read_Index(char **argv,int args,int nRead,int nSeq);
     void Memory_Allocate(int arr);
-    char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
     char **cmatrix(long nrl,long nrh,long ncl,long nch);
+    fasta *segg;
+    long Size_pdata,Size_q_pdata;
+    unsigned int *pidata;
+    int num_seqque;
+    char *pdata,*st;
 
+    seq=NULL;
     if(argc < 2)
     {
-      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
-
+      printf("Usage: %s <input fast/aq file> <output_agp_file>\n",argv[0]);
       exit(1);
     }
 
@@ -86,214 +126,145 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&IMOD); 
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-type"))
+       else if(!strcmp(argv[i],"-qual"))
        {
-         sscanf(argv[++i],"%d",&n_type); 
+         sscanf(argv[++i],"%d",&set_qual);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-block"))
+       else if(!strcmp(argv[i],"-len"))
        {
-         sscanf(argv[++i],"%d",&block_set);
-         edge_flag=1;
+         sscanf(argv[++i],"%d",&set_len);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-tile"))
+       else if(!strcmp(argv[i],"-name"))
        {
-         sscanf(argv[++i],"%d",&tiles_flag);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-reads"))
-       {
-         sscanf(argv[++i],"%d",&barreads);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-score"))
-       {
-         sscanf(argv[++i],"%d",&mpscore);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-max"))
-       {
-         sscanf(argv[++i],"%d",&max_len);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-file"))
-       {
-         sscanf(argv[++i],"%d",&file_flag);
+         memset(ctgname,'\0',30);
+         sscanf(argv[++i],"%s",ctgname);
          args=args+2;
        }
     }
 
-    nseq=0;
-    if((namef = fopen(argv[args],"r")) == NULL)
-    {
-      printf("ERROR main:: args \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      if(fgets(line,2000,namef) == NULL)
-      {
-//       printf("fgets command error:\n);
-      }
-      if(feof(namef)) break;
-      nseq++;
-    }
-    fclose(namef); 
-   
-/*
-    nRead=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
-    {
-      printf("ERROR main:: args+1 \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      fgets(line,2000,namef);
-      if(feof(namef)) break;
-      nRead++;
-    }
-    fclose(namef);   */ 
+    if((fp=fopen(argv[args],"rb"))==NULL) error("Cannot open file\n");
+    fseek(fp, 0, SEEK_END);
+    Size_q_pdata = ftell(fp) + 1;
+    fclose(fp);
+    if((pdata=(char*)calloc(Size_q_pdata,sizeof(char)))==NULL)
+      error("calloc pdata\n");
+    num_seqque = extractFastq(argv[args],pdata,Size_q_pdata);
+    if((segg=(fasta*)calloc((num_seqque+1),sizeof(fasta)))==NULL)
+      error("calloc segg\n");
+    if((seq=decodeFastq(argv[args],&num_seqque,&totalBases,pdata,Size_q_pdata,segg))==NULL)
+      error("no query data found.\n");
+    nSeq = num_seqque;
+    printf("Number of shotgun reads  %d \n",nSeq);
 
-    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-    if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
+    if(totalBases == 0)
+      return EXIT_SUCCESS;
 
-    nSeq=nseq;
-    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    n_readsMaxctg=0;
-    n_contig=0;
-    n_reads=0;
-
-    if((namef = fopen(argv[args],"r")) == NULL)
+/*  process contigs one by one   */
+    if((namef = fopen(argv[args+1],"w")) == NULL)
     {
       printf("ERROR main:: reads group file \n");
       exit(1);
     }
-
-/*  read the alignment files         */
-    i=0;
-    while(fscanf(namef,"%s %s %s %s %s %s",tmpname,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
+/*    if((fpOutfast2 = fopen(argv[args+2],"w")) == NULL)
     {
-        int idt;
-        st = readname;
-        ed= strrchr(readname,'_');
-        memset(tmpname,'\0',60);
-        strcpy(tmpname,ed);
-        strcat(lociname,tmpname);
-        strcat(lociname,"-");
-        idt = atoi(ed+1);
-        j = i/2;
-        if((i%2) == 0)
-        {
-          strcpy(S_Name[j],lociname);  
-        }
-        else
-        {
-          strcat(S_Name[j],lociname);
-          readIndex[j] = j;
-//    printf("%d %s %s %s\n",j,S_Name[j],lociname,readname);
-        }
-        i++;
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }  */
+    for(iseq=0;iseq<nSeq;iseq++)
+    {
+       int seq_st,seq_ed,rc,seq_len;
+       int  kk,start=0,nline=0,outlen=0,n_base,olen=60,offset2=0;
+       seqp= seq + iseq;
+       seq_st = 0;
+       seq_len = seqp->length;
+
+       i_contig = 1;
+       n_Ns=0;
+       for(j=0;j<seq_len;j++) 
+       {
+          kk=j+1;
+          n_Ns=1;
+          while((seqp->data[kk]=='N')&&(seqp->data[j]=='N')&&(kk<seq_len))
+          {
+            kk++;
+            n_Ns++;
+          }
+          if((j==0)&&(n_Ns>=3))
+          {
+//            printf("offset: %d %d\n",j,n_Ns);
+            offset2=n_Ns;
+          }
+          if((n_Ns>=3))
+          {
+            offset=kk-1;
+            sprintf(outName,"%s",seqp->name);
+            outlen=offset-n_Ns+1-start-offset2;
+//            fprintf(fpOutfast2,"%s\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%c\n",seqp->name,start+1,kk-n_Ns,i_contig,'W',outName,1,outlen,'+');
+            i_contig++;
+//            fprintf(fpOutfast2,"%s\t%d\t%d\t%d\t%c\t%d\t%s\t%s\n",seqp->name,kk+1-n_Ns,kk,i_contig,'N',n_Ns,"fragment","yes");
+            fprintf(namef,"%s %d %d %d %d %d\n",seqp->name,iseq,kk+1-n_Ns,kk,n_Ns,i_contig);
+            nline=outlen/olen;
+            st=seqp->data+start+offset2;
+            i_contig++;
+/*            for(i=0;i<nline;i++)
+            {
+               for(k=0;k<olen;k++,st++)
+                  fprintf(fpOutfast,"%c",*st);
+               fprintf(fpOutfast,"\n");
+            }
+            for(k=0;k<(outlen-(nline*olen));k++,st++)
+               fprintf(fpOutfast,"%c",*st);
+            if(outlen%olen!=0)
+              fprintf(fpOutfast,"\n");  */
+            start=offset+1;
+            n_Ns=0;
+            n_base=0;
+            offset2=0;
+            n_contig++;
+          }
+          j=kk-1; 
+       }
+
+       sprintf(outName,"%s",seqp->name);
+       outlen=seq_len-start-n_Ns+1;
+            printf("%s %d %d %d\n",seqp->name,iseq,i_contig,outlen);
+       if(outlen >=10)
+       {
+//         fprintf(fpOutfast2,"%s\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%c\n",seqp->name,start+1,kk-n_Ns+1,i_contig,'W',outName,1,outlen,'+');
+         i_contig++;
+         nline=outlen/olen;
+//         fprintf(fpOutfast,">%s %s %d %d %d %d %d\n",outName,seqp->name,i,offset,outlen,start,n_Ns-1);
+/*         st=seqp->data+start;
+         for(i=0;i<nline;i++)
+         {
+            for(k=0;k<olen;k++,st++)
+               fprintf(fpOutfast,"%c",*st);
+            fprintf(fpOutfast,"\n");
+         }
+         for(k=0;k<(outlen-(nline*olen));k++,st++)
+            fprintf(fpOutfast,"%c",*st);
+         if(outlen%olen!=0)
+           fprintf(fpOutfast,"\n");   */
+         n_contig++;
+       }
+//       fprintf(fpOutfast2,"\n");
     }
     fclose(namef);
+//    fclose(fpOutfast);
+//    fclose(fpOutfast2);
 
-
-    n_reads=i/2;
-//    Readname_match(seq,argv,args,n_reads,nRead);
-    Mapping_Process(argv,args,n_reads);
-//    Read_Pairs(argv,args,seq,n_reads);
-
+    if(seq){
+        free(seq->name);
+        free(seq);
+        seq = NULL;
+    }    
+    printf("Job finished for %d contigs!\n",nSeq);
     return EXIT_SUCCESS;
 
 }
 /* end of the main */
-
-/*   subroutine to sort out read pairs    */
-/* =============================== */
-void Mapping_Process(char **argv,int args,int nSeq)
-/* =============================== */
-{
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
-     FILE *namef,*namef2;
-     char line[2000];
-     void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
-     ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
-     num_hits =0;
-     k = 0;
-     n_uniqs = 0;
-     for(i=0;i<(nSeq-1);i++)
-     {
-        stopflag=0;
-        j=i+1;
-        while((j<nSeq)&&(stopflag==0))
-        {
-          if(strcmp(S_Name[i],S_Name[j])==0)
-          {
-            j++;
-          }
-          else
-            stopflag=1;
-        }
-        k = readIndex[i];
-        num_hits = j-i;
-        if(num_hits>=2) 
-        {
-          n_uniqs++;
-	  for(n=(i+1);n<j;n++)
-	  {
-             int idd = 2*readIndex[n];
-             hit_masks[idd] = 1;
-             hit_masks[idd+1] = 1;
-          }
-        }
-        else
-        {
-          n_uniqs++;
-        }
-        i=j-1;
-     }
-
-     if((namef = fopen(argv[args],"r")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-     if((namef2 = fopen(argv[args+1],"w")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-
-     i=0;
-     while(!feof(namef))
-     {
-       if(fgets(line,2000,namef) == NULL)
-       {
-//        printf("fgets command error:\n);
-       }
-       if(feof(namef)) break;
-       if(hit_masks[i] == 0)
-         fprintf(namef2,"%s",line);
-       i++;
-     }
-     fclose(namef);
-     fclose(namef2);
-     printf("Masked reads %d %d %d\n",i,nSeq,n_uniqs);
-}
-
 
 #define SWAP(a,b) temp=(a);(a)=b;(b)=temp;
 
@@ -861,7 +832,7 @@ void ArraySort_Mix3(int n, long *arr, int *brr, int *crr)
 
 /*   to swap the string arrays           */
 /* ============================================= */
-void s_swap(char **Pair_Name, int i, int j)
+void s_swap(char Pair_Name[][Max_N_NameBase], int i, int j)
 /* ============================================= */
 {
      char temp[Max_N_NameBase];
@@ -874,7 +845,7 @@ void s_swap(char **Pair_Name, int i, int j)
 
 /*   to sort the string array in order          */
 /* ============================================= */
-void ArraySort_String(int n, char **Pair_Name, int *brr)
+void ArraySort_String(int n, char Pair_Name[][Max_N_NameBase], int *brr)
 /* ============================================= */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,NSTACK=50,istack[NSTACK];

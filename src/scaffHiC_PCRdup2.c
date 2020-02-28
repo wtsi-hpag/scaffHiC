@@ -44,8 +44,9 @@
 #define MAX_N_ROW 50000 
 #define Max_N_NameBase 40 
 #define Max_N_Pair 100
-static char **S_Name,**R_Name,**R_Name2,**T_Name,**cellname;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+static char **S_Name,**R_Name;
+static int *hit_locus,*hit_masks,*readIndex,*hit_index,*hit_offset2;
+static int *ctg_index,*ctg_offset,*ctg_rddex;
 
 /* SSAS default parameters   */
 static int IMOD=0;
@@ -57,17 +58,14 @@ static int block_set=2500;
 static int edge_flag=0;
 static int mpscore=20;
 static int nContig=0;
+static int sshift=15;
 static int max_len = 100000;
 
 int main(int argc, char **argv)
 {
     FILE *namef;
-    int i,j,nSeq,args;
+    int i,j,nSeq,args,idd1,off1;
     int n_contig,n_reads,n_readsMaxctg,nseq;
-    void decodeReadpair(int nSeq);
-    void HashFasta_Head(int i, int nSeq);
-    void HashFasta_Table(int i, int nSeq);
-    void Assemble_SM(int arr,int brr);
     void Mapping_Process(char **argv,int args,int nSeq);
     void Memory_Allocate(int arr);
     char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
@@ -79,6 +77,8 @@ int main(int argc, char **argv)
 
       exit(1);
     }
+
+    sshift = 15;
 
     nSeq=0;
     args=1;
@@ -144,36 +144,45 @@ int main(int argc, char **argv)
     }
     fclose(namef); 
    
-/*
-    nRead=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
-    {
-      printf("ERROR main:: args+1 \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      fgets(line,2000,namef);
-      if(feof(namef)) break;
-      nRead++;
-    }
-    fclose(namef);   */ 
-
     if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("fmate: calloc - hit_locus2\n");
+      printf("fmate: calloc - hit_masks\n");
       exit(1);
     }
     if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("fmate: calloc - hit_locus2\n");
+      printf("fmate: calloc - hit_idd\n");
+      exit(1);
+    }
+    if((hit_index = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_index\n");
+      exit(1);
+    }
+    if((hit_locus = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_locus\n");
+      exit(1);
+    }
+    if((ctg_index = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_locus\n");
+      exit(1);
+    }
+    if((ctg_offset = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_locus\n");
+      exit(1);
+    }
+    if((ctg_rddex = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_locus\n");
       exit(1);
     }
 
     nSeq=nseq;
     S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
     R_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    T_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
     n_readsMaxctg=0;
     n_contig=0;
     n_reads=0;
@@ -185,11 +194,14 @@ int main(int argc, char **argv)
     }
 
 /*  read the alignment files         */
+    nContig = 0;
     i=0;
+    idd1 = 0;
+    off1 = 0;
     while(fscanf(namef,"%s %s %s %s %s %s",R_Name[i],readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
     {
-        int idt;
+        int idt,idi;
+        int idd;
         st = readname;
         ed= strrchr(readname,'_');
         memset(tmpname,'\0',60);
@@ -197,16 +209,28 @@ int main(int argc, char **argv)
         strcat(lociname,tmpname);
         strcat(lociname,"-");
         idt = atoi(ed+1);
-        strcpy(S_Name[i],lociname);  
-        strcpy(T_Name[i],lociname);  
-//    printf("%d %s %s %s\n",i,S_Name[i],lociname,readname);
+        if(idt > nContig)
+          nContig = idt;
+        idi = atoi(lociname);
+        idd = idt;
+        strcpy(S_Name[i],lociname);
+        if((i%2)!=0)
+        {
+          hit_index[i-1] = idt; 
+          hit_index[i] = idd1; 
+          hit_locus[i-1] = idi; 
+          hit_locus[i] = off1; 
+        }
+        idd1 = idt;
+        off1 = idi; 
+//    printf("%d %s %s %s %d %d\n",i,S_Name[i-1],lociname,R_Name[i],idd1,idd);
         readIndex[i] = i;
         i++;
     }
     fclose(namef);
 
-
-    n_reads=i/2;
+    nContig = nContig + 100; 
+    n_reads=i;
 //    Readname_match(seq,argv,args,n_reads,nRead);
     Mapping_Process(argv,args,n_reads);
 //    Read_Pairs(argv,args,seq,n_reads);
@@ -221,14 +245,19 @@ int main(int argc, char **argv)
 void Mapping_Process(char **argv,int args,int nSeq)
 /* =============================== */
 {
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
+     int i,j,k,m,n,n_uniqs,offset;
+     int num_hits,stopflag,stopflag2,*ray,*dex;
      FILE *namef,*namef2;
+     unsigned long nmask;
      char line[2000];
      void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
+     void ArraySort_Mix(int n, long *arr, int *brr);
+     void ArraySort_Int2(int n, int *arr, int *brr);
+ 
      ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
+//     for(i=0;i<nSeq;i++)
+//        printf("reads: %d %s %s %d %d\n",i,S_Name[i],R_Name[readIndex[i]],hit_index[readIndex[i]],hit_locus[readIndex[i]]);
+
      num_hits =0;
      k = 0;
      n_uniqs = 0;
@@ -249,25 +278,54 @@ void Mapping_Process(char **argv,int args,int nSeq)
         num_hits = j-i;
         if(num_hits>=3) 
         {
-          n_uniqs++;
-	  for(n=i;n<j;n++)
-	  {
-             int idd = readIndex[n];
-             int idi;
-
-             if((idd%2)==0)
-             {
-//               printf("Duplicates1: %d %d %s %s %s\n",n,readIndex[n],S_Name[i],R_Name[idd],T_Name[idd+1]);
-               hit_masks[idd] = 1;
-               hit_masks[idd+1] = 1;
-             }
-             else
-             {
-//               printf("Duplicates: %d %d %s %s %s\n",n,readIndex[n],S_Name[i],R_Name[idd],T_Name[idd-1]);
-               hit_masks[idd] = 1;
-               hit_masks[idd-1] = 1;
-             }
+          for(n=i;n<j;n++)
+          {
+             ctg_index[n] = hit_index[readIndex[n]];
+             ctg_offset[n] = hit_locus[readIndex[n]];
+             ctg_rddex[n] = n;
           }
+
+          ray = ctg_index;
+          dex = ctg_rddex;
+          offset = i;
+          ArraySort_Int2(num_hits,ray+offset,dex+offset);
+          for(n=i;n<(j-1);n++)
+          {
+             stopflag2 = 0;
+             m = n+1;
+             while((m<j)&&(stopflag2==0))
+             {
+               if(ctg_index[n] == ctg_index[m])
+               {
+                 m++;
+               }
+               else
+                 stopflag2=1;
+             }
+             if((m-n) >= 3)
+             {
+
+               for(k=(n+1);k<m;k++)
+               {
+                  int iki = ctg_rddex[k];
+                  int idd = readIndex[iki];
+                  
+//                  printf("reads: %d %s %s %d %d\n",i,S_Name[k],R_Name[readIndex[iki]],hit_index[readIndex[iki]],hit_locus[readIndex[iki]]);
+                  if((idd%2)==0)
+                  {
+                    hit_masks[idd] = 1;
+                    hit_masks[idd+1] = 1;
+                  }
+                  else
+                  {
+                    hit_masks[idd] = 1;
+                    hit_masks[idd-1] = 1;
+                  }
+               }
+             }
+             n = m-1;
+          } 
+          n_uniqs++;
         }
         else
         {

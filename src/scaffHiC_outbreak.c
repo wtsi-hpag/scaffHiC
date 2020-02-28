@@ -1,30 +1,33 @@
-/****************************************************************************
- ****************************************************************************
- *                                                                          *
- *  Copyright (C) 2018  Genome Research Ltd.                                *
- *                                                                          *
- *  Author: Zemin Ning (zn1@sanger.ac.uk)                                   *
- *                                                                          *
- *  This file is part of ScaffHiC pipeline.                                 *
- *                                                                          *
- *  ScaffHiC is a free software: you can redistribute it and/or modify it   *
- *  under the terms of the GNU General Public License as published by the   *
- *  Free Software Foundation, either version 3 of the License, or (at your  *
- *  option) any later version.                                              *
- *                                                                          *
- *  This program is distributed in the hope that it will be useful, but     *
- *  WITHOUT ANY WARRANTY; without even the implied warranty of              *
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU        *
- *  General Public License for more details.                                *
- *                                                                          *
- *  You should have received a copy of the GNU General Public License along *
- *  with this program.  If not, see <http://www.gnu.org/licenses/>.         *
- *                                                                          *
- ****************************************************************************
- ****************************************************************************/
+/***********************************************************************\
+ *                                                                     * 
+ *                         PROJECT   ssaha_pileup                      *
+ *                                                                     * 
+ *---------------------------------------------------------------------*
+ *                                                                     *
+ *                                By                                   *
+ *                                                                     *
+ *                            Zemin Ning                               *
+ *                                                                     *
+ *          Copyright (C) 2008 by Genome Research Limited              *
+ *                       All rights reserved                           *
+ *                                                                     *
+ *---------------------------------------------------------------------*
+ #######################################################################
+ #                                                                     #
+ #             <------   LICENCE NOTICE   ------>                      #
+ #                                                                     #
+ # This is a licensed software developed by Genome Research Limited    #
+ # (GRL) for genomic sequence assembling. For both commercial and non- # 
+ # commercial purposes, a licence must be obtained from GRL before     #
+ # use. Under no circumstances, the users should copy, modify and      #
+ # redistribut the software as a whole or even part of it without      #
+ # permission from GRL. For more information about the software and    #
+ # its ducumentation particularly, please contact either one of the    # 
+ # authors or GRL.                                                     #
+ #######################################################################
+ *---------------------------------------------------------------------*/
+
 /****************************************************************************/
-
-
 
 #include <math.h>
 #include <values.h>
@@ -34,46 +37,66 @@
 #include <dirent.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/types.h> 
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <sys/signal.h>
+#include <errno.h>
+#include "fasta.h"
 
-#define GT '>'
-#define GT4 (((((GT<<8)+GT)<<8)+GT)<<8)+GT
-
+#define MAXLINE 4096
 #define ENDS_EXTRA 0
 #define PADCHAR '-'
-#define MAX_N_BRG 50000 
-#define MAX_N_ROW 50000 
-#define Max_N_NameBase 60 
+#define Max_N_NameBase 50
 #define Max_N_Pair 100
-static char **S_Name;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+static B64_long *cigar_head,sBase;
+static char *dataline,*cigar_line;
 
 /* SSAS default parameters   */
 static int IMOD=0;
-static int n_type=0;
-static int barreads=10;
-static int file_flag=2;
-static int tiles_flag=0;
-static int block_set=2500;
-static int edge_flag=0;
-static int mpscore=20;
-static int nContig=0;
-static int n_lenn = 14;
-static int max_len = 100000;
+static B64_long line_len=0;
+static int num_insreads=0;
+static int num_delreads=0;
+static int num_hitreads=0;
+static int num_reads=0;
+static int num_cline=0;
+static int set_shift = 10;
+static int insert_flag = 0;
+static int file_flag = 0;
+static int delete_flag = 0;
+static int n_contigs = 0;
+static char strain_name[100];
+
+typedef struct
+{
+       int foffset;
+       int fsindex;
+} SIO;
+
+fasta *sub;
+
 
 int main(int argc, char **argv)
 {
-    FILE *namef;
-    int i,j,nSeq,args;
-    int n_contig,n_reads,n_readsMaxctg,nseq;
-    void Mapping_Process(char **argv,int args,int nSeq);
-    void Memory_Allocate(int arr);
-    char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
-    char **cmatrix(long nrl,long nrh,long ncl,long nch);
+    FILE *fp,*namef,*fpOutfast;
+    int i,j,nSeq,args,i_contig,idt;
+    char *ed,line[2000]={0},ctgnameout[Max_N_NameBase],tmptext[Max_N_NameBase],readname[Max_N_NameBase];
+    char **cmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch);
+    fasta *seq,*seq2; 
+    void ArraySort_Mix(int n, B64_long *arr, int *brr);
+    fasta *segg,*seqp,*seqp2;
+    B64_long Size_q_pdata;
+    void ArraySort_Int2(int n, int *arr, int *brr);
+    int nBreaks,*break_list,*break_head;
+    int num_seqque,size_range[5],*ctg_list,*ctg_head,*ctg_loci,*ctg_length,*ctg_index,*ctg_gaplen;
+    char *pdata;
 
+
+    memset(strain_name,'\0',100);
     if(argc < 2)
     {
-      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
-
+      printf("Usage: %s <input_contig_fastq> <break_file> <output_contig_fastq> \n",argv[0]);
       exit(1);
     }
 
@@ -86,35 +109,9 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&IMOD); 
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-type"))
+       else if(!strcmp(argv[i],"-insertion"))
        {
-         sscanf(argv[++i],"%d",&n_type); 
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-block"))
-       {
-         sscanf(argv[++i],"%d",&block_set);
-         edge_flag=1;
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-tile"))
-       {
-         sscanf(argv[++i],"%d",&tiles_flag);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-reads"))
-       {
-         sscanf(argv[++i],"%d",&barreads);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-score"))
-       {
-         sscanf(argv[++i],"%d",&mpscore);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-max"))
-       {
-         sscanf(argv[++i],"%d",&max_len);
+         sscanf(argv[++i],"%d",&insert_flag);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-file"))
@@ -122,178 +119,193 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&file_flag);
          args=args+2;
        }
+       else if(!strcmp(argv[i],"-shift"))
+       {
+         sscanf(argv[++i],"%d",&set_shift);
+         args=args+2;
+       }
     }
 
-    nseq=0;
-    if((namef = fopen(argv[args],"r")) == NULL)
-    {
-      printf("ERROR main:: args \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      if(fgets(line,2000,namef) == NULL)
-      {
-//       printf("fgets command error:\n);
-      }
-      if(feof(namef)) break;
-      nseq++;
-    }
-    fclose(namef); 
-   
-/*
-    nRead=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
-    {
-      printf("ERROR main:: args+1 \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      fgets(line,2000,namef);
-      if(feof(namef)) break;
-      nRead++;
-    }
-    fclose(namef);   */ 
+    if((fp=fopen(argv[args],"rb"))==NULL) printf("Cannot open file\n");
+      fseek(fp, 0, SEEK_END);
+    Size_q_pdata = ftell(fp) + 1;
+    fclose(fp);
+    if((pdata=(char*)calloc(Size_q_pdata,sizeof(char)))==NULL)
+      printf("calloc pdata\n");
+    num_seqque = extractFastq(argv[args],pdata,Size_q_pdata);
+    if((segg=(fasta*)calloc((num_seqque),sizeof(fasta)))==NULL)
+      printf("calloc segg\n");
+    if((seq=decodeFastq(argv[args],&num_seqque,&sBase,pdata,Size_q_pdata,segg))==NULL)
+      printf("no query data found.\n");
+    nSeq = num_seqque;
+    fastaUC(seq,nSeq);
 
-    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-    if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-
-    nSeq=nseq;
-    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    n_readsMaxctg=0;
-    n_contig=0;
-    n_reads=0;
-
-    if((namef = fopen(argv[args],"r")) == NULL)
+    if((fp = fopen(argv[args+1],"r")) == NULL)
     {
       printf("ERROR main:: reads group file \n");
       exit(1);
     }
-
-/*  read the alignment files         */
-    i=0;
-    while(fscanf(namef,"%s %s %s %s %s %s",tmpname,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
+    i_contig = 0;
+    while(!feof(fp))
     {
-        int idt;
-        st = readname;
-        ed= strrchr(readname,'_');
-        memset(tmpname,'\0',60);
-        strcpy(tmpname,ed);
-        strcat(lociname,tmpname);
-        strcat(lociname,"-");
-        idt = atoi(ed+1);
-        j = i/2;
-        if((i%2) == 0)
-        {
-          strcpy(S_Name[j],lociname);  
-        }
-        else
-        {
-          strcat(S_Name[j],lociname);
-          readIndex[j] = j;
-//    printf("%d %s %s %s\n",j,S_Name[j],lociname,readname);
-        }
-        i++;
+      if(fgets(line,2000,fp) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
+      if(feof(fp)) break;
+      i_contig++;
+    }
+    fclose(fp);
+
+    nBreaks = i_contig;
+    printf("Contigs: %d %d %ld\n",i_contig,nSeq,sBase);
+    i_contig = i_contig + nSeq;
+    if((ctg_list= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_list\n");
+      exit(1);
+    }
+    if((ctg_head= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_head\n");
+      exit(1);
+    }
+    if((ctg_loci= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_loci\n");
+      exit(1);
+    }
+    if((ctg_gaplen= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_loci\n");
+      exit(1);
+    }
+    if((ctg_length= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_loci\n");
+      exit(1);
+    }
+    if((ctg_index= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_index\n");
+      exit(1);
+    }
+
+    if((break_list= (int *)calloc(nBreaks,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_index\n");
+      exit(1);
+    }
+    if((break_head= (int *)calloc(nBreaks,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_index\n");
+      exit(1);
+    }
+
+    if((namef = fopen(argv[args+1],"r")) == NULL)
+    {
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }
+    i_contig = 0;
+    while(fscanf(namef,"%s %d %d %d %s %s %d",tmptext,&ctg_index[i_contig],&ctg_loci[i_contig],&ctg_length[i_contig],tmptext,tmptext,&ctg_gaplen[i_contig])!=EOF)
+    {
+      idt = ctg_index[i_contig];
+      ctg_list[idt]++;
+      i_contig++;
     }
     fclose(namef);
 
+    ctg_head[0] = 0;
+    for(i=1;i<nSeq;i++)
+       ctg_head[i] = ctg_head[i-1] + ctg_list[i-1];
 
-    n_reads=i/2;
-//    Readname_match(seq,argv,args,n_reads,nRead);
-    Mapping_Process(argv,args,n_reads);
-//    Read_Pairs(argv,args,seq,n_reads);
+/*  input read alignment info line   */
+    if((fpOutfast = fopen(argv[args+2],"w")) == NULL)
+    {
+      printf("ERROR main:: reads group file: %s \n",argv[args]);
+      exit(1);
+    }
 
+    for(i=0;i<nSeq;i++)
+    {
+       for(j=0;j<ctg_list[i];j++)
+       {
+          idt = j+ctg_head[i]; 
+//          printf("xxx: %s %d %d %d %d\n",(seq+i)->name,i,ctg_loci[idt],ctg_length[idt],(seq+i)->length);
+       }
+    }
+    for(i=0;i<nSeq;i++)
+    {
+       int seq_st,seq_ed,rc,seq_len,st2,ed2;
+       int trash_flag = 0;
+
+       seqp= seq + i;
+       seq_st = 0;
+       seq_ed = seqp->length;
+       if(ctg_list[i]==0)
+       {
+         fprintf(fpOutfast,"@%s\n",seqp->name);
+         for(rc=seq_st;rc<seq_ed;rc++)
+            fprintf(fpOutfast,"%c",seqp->data[rc]);
+         fprintf(fpOutfast,"\n");
+         fprintf(fpOutfast,"+%s\n",seqp->name);
+	 putc(0+041,fpOutfast);
+         for(rc=1;rc<seq_ed;rc++)
+	    putc(seqp->qual[rc]+041,fpOutfast);
+         fprintf(fpOutfast,"\n");
+       }
+       else
+       {
+         seq_st = 0;
+         seq_ed = ctg_loci[ctg_head[i]];
+         if(seqp->length <seq_ed)
+           printf("www1: %d %d %d %d %s || %d\n",i,j,seq_ed,seqp->length,seqp->name,ctg_head[i]);
+         fprintf(fpOutfast,"@%s\n",seqp->name);
+         for(rc=seq_st;rc<seq_ed;rc++)
+            fprintf(fpOutfast,"%c",seqp->data[rc]);
+         fprintf(fpOutfast,"\n");
+         fprintf(fpOutfast,"+%s\n",seqp->name);
+	 putc(0+041,fpOutfast);
+         for(rc=1;rc<seq_ed;rc++)
+	    putc(seqp->qual[rc]+041,fpOutfast);
+         fprintf(fpOutfast,"\n");
+       }
+    }
+
+    for(i=0;i<nSeq;i++)
+    {
+       int seq_st,seq_ed,rc,seq_len;
+
+       if(ctg_list[i] > 0)
+       {
+         seqp = seq+i;
+         for(j=0;j<ctg_list[i];j++)
+         {
+            int idd = ctg_head[i]+j;
+        
+            seq_st = ctg_loci[idd]+ctg_gaplen[idd];
+            if(j == (ctg_list[i]-1))
+              seq_ed = seqp->length;
+            else 
+              seq_ed = ctg_loci[idd+1]; 
+            fprintf(fpOutfast,"@%s_break%03d\n",seqp->name,j);
+            for(rc=seq_st;rc<seq_ed;rc++)
+               fprintf(fpOutfast,"%c",seqp->data[rc]);
+            fprintf(fpOutfast,"\n");
+            fprintf(fpOutfast,"+%s_break%03d\n",seqp->name,j);
+            putc(0+041,fpOutfast);
+            for(rc=(seq_st+1);rc<seq_ed;rc++)
+               putc(seqp->qual[rc]+041,fpOutfast);
+            fprintf(fpOutfast,"\n");
+         }
+       }
+    }
+    fclose(fpOutfast);
     return EXIT_SUCCESS;
 
 }
 /* end of the main */
-
-/*   subroutine to sort out read pairs    */
-/* =============================== */
-void Mapping_Process(char **argv,int args,int nSeq)
-/* =============================== */
-{
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
-     FILE *namef,*namef2;
-     char line[2000];
-     void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
-     ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
-     num_hits =0;
-     k = 0;
-     n_uniqs = 0;
-     for(i=0;i<(nSeq-1);i++)
-     {
-        stopflag=0;
-        j=i+1;
-        while((j<nSeq)&&(stopflag==0))
-        {
-          if(strcmp(S_Name[i],S_Name[j])==0)
-          {
-            j++;
-          }
-          else
-            stopflag=1;
-        }
-        k = readIndex[i];
-        num_hits = j-i;
-        if(num_hits>=2) 
-        {
-          n_uniqs++;
-	  for(n=(i+1);n<j;n++)
-	  {
-             int idd = 2*readIndex[n];
-             hit_masks[idd] = 1;
-             hit_masks[idd+1] = 1;
-          }
-        }
-        else
-        {
-          n_uniqs++;
-        }
-        i=j-1;
-     }
-
-     if((namef = fopen(argv[args],"r")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-     if((namef2 = fopen(argv[args+1],"w")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-
-     i=0;
-     while(!feof(namef))
-     {
-       if(fgets(line,2000,namef) == NULL)
-       {
-//        printf("fgets command error:\n);
-       }
-       if(feof(namef)) break;
-       if(hit_masks[i] == 0)
-         fprintf(namef2,"%s",line);
-       i++;
-     }
-     fclose(namef);
-     fclose(namef2);
-     printf("Masked reads %d %d %d\n",i,nSeq,n_uniqs);
-}
-
 
 #define SWAP(a,b) temp=(a);(a)=b;(b)=temp;
 
@@ -303,11 +315,11 @@ void Mapping_Process(char **argv,int args,int nSeq)
      vol. 21, pp. 847-857) also see Numerical Recipes in C                  */  
 
 /* =============================== */
-void ArraySort_Long(int n, long *arr)
+void ArraySort_Long(int n, B64_long *arr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -471,11 +483,11 @@ void ArraySort_Int(int n, int *arr)
 
 
 /* =============================== */
-void ArraySort_Mix(int n, long *arr, int *brr)
+void ArraySort_Mix(int n, B64_long *arr, int *brr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -754,11 +766,11 @@ void ArraySort2_Int2(int n, int *arr, int *brr)
 }
 
 /* =============================== */
-void ArraySort_Mix3(int n, long *arr, int *brr, int *crr)
+void ArraySort_Mix3(int n, B64_long *arr, int *brr, int *crr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,c,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -970,9 +982,40 @@ void ArraySort_String(int n, char **Pair_Name, int *brr)
 
 
 /* creat an int matrix with subscript ange m[nrl...nrh][ncl...nch]  */
-int     **imatrix(long nrl,long nrh,long ncl,long nch)
+int     **mmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
 {
-        long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        int  **m;
+
+        
+        /* allocate pointers to rows        */
+        if((m=(int **)calloc(nrow,sizeof(int*)))==NULL)
+        {
+           printf("error imatrix: calloc error No. 1 \n");
+           return(NULL);
+        }
+        m+=0;
+        m-=nrl;
+
+        /* allocate rows and set pointers to them        */
+        if((m[nrl]=(int *)calloc(nrow*ncol,sizeof(int)))==NULL)
+        {
+           printf("error imatrix: calloc error No. 2 \n");
+           return(NULL);
+        }
+        m[nrl]+=0;
+        m[nrl]-=nrl;
+
+        for(i=nrl+1;i<=nrh;i++)
+           m[i]=m[i-1]+ncol;
+        /* return pointer to array of pointers to rows   */
+        return m;
+}
+
+/* creat an int matrix with subscript ange m[nrl...nrh][ncl...nch]  */
+int     **imatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
+{
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
         int  **m;
 
         /* allocate pointers to rows        */
@@ -1000,9 +1043,9 @@ int     **imatrix(long nrl,long nrh,long ncl,long nch)
 }
 
 /* creat char matrix with subscript ange cm[nrl...nrh][ncl...nch]  */
-char    **cmatrix(long nrl,long nrh,long ncl,long nch)
+char    **cmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
 {
-        long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
         char **cm;
 
         /* allocate pointers to rows        */

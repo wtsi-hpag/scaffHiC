@@ -39,7 +39,7 @@
 #define Max_N_NameBase2 14 
 static char **R_Name;
 static int *hit_rddex,*hit_score,*hit_rcdex,*hit_locus1,*superlength,*hit_matlocu1,*hit_matlocu2,*hit_matindex;
-static int *ctg_length,*hit_index;
+static int *ctg_length,*ctg_index,*hit_index,*scf_list,*scf_head,*scf_length,*scf_index,*scf_score,*ctg_inscf;
 
 /* SSAS default parameters   */
 static int IMOD=0;
@@ -50,6 +50,7 @@ static int max_ctg = 1000000;
 static int mtg_length = 100000000;
 static int n_depth = 60;
 static int c_pairs = 100;
+static int n_scaffs = 100;
 static float m_score = 200.0;
 static float d_score = 0.8;
 static float c_score = 1.0;
@@ -63,7 +64,7 @@ static int j_getindex = 52;
 int main(int argc, char **argv)
 {
     FILE *namef;
-    int i,nSeq,args,idt;
+    int i,j,nSeq,args,idt,num_hit,stopflag;
     int n_contig,n_reads,nseq;
     void Matrix_Process(char **argv,int args,int nSeq);
     char *st,*ed;
@@ -123,6 +124,119 @@ int main(int argc, char **argv)
     if(system("ps aux | grep scaffHiC_pmatrix; date") == -1)
     {
 //        printf("System command error:\n);
+    }
+
+    nseq=0;
+    if((namef = fopen(argv[args+1],"r")) == NULL)
+    {
+      printf("ERROR main:: args \n");
+      exit(1);
+    }
+    while(!feof(namef))
+    {
+      if(fgets(line,2000,namef) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
+      if(feof(namef)) break;
+      nseq++;
+    }
+    fclose(namef); 
+
+    n_scaffs = nseq;
+    if((scf_list = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - scf_list\n");
+      exit(1);
+    }
+    if((scf_head = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - scf_head\n");
+      exit(1);
+    }
+    if((scf_index = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - scf_index\n");
+      exit(1);
+    }
+    if((ctg_index = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - ctg_index\n");
+      exit(1);
+    }
+    if((ctg_inscf = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - ctg_index\n");
+      exit(1);
+    }
+    if((scf_length = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - scf_length\n");
+      exit(1);
+    }
+    if((scf_score = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - scf_score\n");
+      exit(1);
+    }
+
+    if((namef = fopen(argv[args+1],"r")) == NULL)
+    {
+      printf("ERROR main:: args \n");
+      exit(1);
+    }
+
+    i = 0;
+    while(fscanf(namef,"%s %d %d %s %s %s %d",rdname,&ctg_index[i],&scf_length[i],tempc1,tempc1,tempc1,&scf_score[i])!=EOF)
+    {
+      st = strrchr(rdname,'_');
+      scf_index[i] = atoi(st+1);
+      i++;
+    }
+    fclose(namef);
+
+    num_hit = i;
+    n_scaffs = 0;
+    for(i=0;i<num_hit;i++)
+    {
+       stopflag=0;
+       j=i+1;
+       while((j<num_hit)&&(stopflag==0))
+       {
+         if(scf_index[j]==scf_index[i])
+         {
+           j++;
+         }
+         else
+           stopflag=1;
+       }
+
+//    printf("www: %d %d %d\n",num_hit,n_scaffs,j-i);
+       scf_list[n_scaffs] = j-i;
+       n_scaffs++;
+       i=j-1;
+    }
+
+    scf_head[0] = 0;
+    for(i=1;i<=n_scaffs;i++)
+    {
+       scf_head[i] = scf_head[i-1] + scf_list[i-1];
+    }
+
+
+    for(i=0;i<n_scaffs;i++)
+    {
+//    printf("www: %d %d %d\n",num_hit,n_scaffs,scf_list[i]);
+       for(j=0;j<scf_list[i];j++)
+       {
+          int idd = scf_head[i]+j;
+          if(scf_list[i] >=2)
+          {
+            ctg_inscf[ctg_index[idd]] = j+1;
+    printf("num: %d %d %d %d %d\n",i,j,n_scaffs,scf_index[idd],ctg_index[idd],scf_list[i]);
+          }
+
+       }
     }
 
     nseq=0;
@@ -230,7 +344,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
      void ArraySort_Mix(int n, long *arr, int *brr);
      void ArraySort_float2(int n, float *arr, int *brr);
      char **DBname,*st,*ed;
-     int **p_matrix,**PP_matrix,**PN_matrix,**PO_matrix,**s_matrix,**s2_matrix,**o_matrix,**r_matrix,**rc0_matrix,**rc1_matrix,**rc2_matrix,**rc3_matrix,**rc_matrix,**rcdex_matrix;
+     int **p_matrix,**s_matrix,**s2_matrix,**o_matrix,**r_matrix,**rc0_matrix,**rc1_matrix,**rc2_matrix,**rc3_matrix,**rc_matrix,**rcdex_matrix;
      float rate,c_score1,c_score2,nl_score,nr_score,*Dis_index,*Dis_ratia1,*Dis_ratia2,*Dis_score1,*Dis_score2,*Dnd_score1,*Dnd_score2,*DD_score1,*DD_score2;
      int **imatrix(long nrl,long nrh,long ncl,long nch);
      float **fmatrix(long nrl,long nrh,long ncl,long nch);
@@ -486,9 +600,6 @@ void Matrix_Process(char **argv,int args,int nSeq)
      printf("contigs: %d %d %d\n",rsize,max_ctg,nSeq);
      size_row = n_depth;
      p_matrix=imatrix(0,rsize,0,rsize);
-     PP_matrix=imatrix(0,rsize,0,100);
-     PN_matrix=imatrix(0,rsize,0,100);
-     PO_matrix=imatrix(0,rsize,0,100);
      s_matrix=imatrix(0,rsize,0,rsize);
      s2_matrix=imatrix(0,rsize,0,rsize);
      o_matrix=imatrix(0,rsize,0,rsize);
@@ -699,6 +810,8 @@ void Matrix_Process(char **argv,int args,int nSeq)
      printf("Total number of contigs: %d\n",max_ctg);
      for(i=0;i<max_ctg;i++)
      {
+       if(ctg_inscf[i] > 0)
+       {
         for(j=0;j<max_ctg;j++)
            hit_rddex[j] = j;
         Dis_index[i] = 0.0;
@@ -784,7 +897,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
              i_getindex = idi;
              j_getindex = idj;  
              Reads_Distribution(n_pairs,ctg_length[idi],ray+offset1,dex+offset1);
-             printf("Distribute: %d %d %d %d %f %f || %d %d\n",halflen_1,halflen_2,half_len1,half_len2,d_score,c_score,n_pairs,c_pairs);
+//             printf("Distribute: %d %d %d %d %f %f || %d %d\n",halflen_1,halflen_2,half_len1,half_len2,d_score,c_score,n_pairs,c_pairs);
              c_score1 = c_score;
              c1_pairs = c_pairs;
            }
@@ -795,7 +908,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
              i_getindex = idj;
              j_getindex = idi;  
              Reads_Distribution(n_pairs,ctg_length[idj],ray+offset2,dex+offset2);
-             printf("Distribute: %d %d %d %d %f %f || %d %d\n",halflen_1,halflen_2,half_len1,half_len2,d_score,c_score,n_pairs,c_pairs);
+//             printf("Distribute: %d %d %d %d %f %f || %d %d\n",halflen_1,halflen_2,half_len1,half_len2,d_score,c_score,n_pairs,c_pairs);
              c_score2 = c_score;
              c2_pairs = c_pairs;
            }
@@ -861,7 +974,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
            Dis_ratia2[j] = rat2;
 
            Dis_index[j] = rr1*rr2; 
-           printf("%6d | %6d %d %d | %d %d %f %f %f %f | %f %f %f %4d %4d %4d %4d | %f %f\n",ctg_length[idd],r_matrix[i][j],hit_rddex[j],rcindex,halflen_1,halflen_2,rat1,rat2,c_score1,c_score2,rr1,rr2,rr1*rr2,rc0_matrix[i][idd],rc1_matrix[i][idd],rc2_matrix[i][idd],rc3_matrix[i][idd],nl_score,nr_score);
+           printf("%6d | %6d %d %d | %f %f %f %f | %f %f %f %4d %4d %4d %4d\n",ctg_length[idd],r_matrix[i][j],hit_rddex[j],rcindex,rat1,rat2,c_score1,c_score2,rr1,rr2,rr1*rr2,rc0_matrix[i][idd],rc1_matrix[i][idd],rc2_matrix[i][idd],rc3_matrix[i][idd]);
         }
 
         if((ctg_length[i]>=n_length))
@@ -900,7 +1013,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
 
 //               if(i==41)
 //                 printf("Dis: %d %f %f %f\n",k,DD_score1[k],DD_score2[k],DS);
-               if((ctg_length[hit_rddex[k]]>=n_length)&&(disdex < Dis_index[k])&&(ctg_rcindex[k]<2)&&(Dis_ratia1[k] > 1.01)&&(Dis_ratia2[k] > 1.01)&&(Dis_score1[k] >= d_score)&&(Dis_score2[k] >= d_score)&&(Dnd_score1[k]<=N_score)&&(Dnd_score2[k]<=N_score)&&(DS < 50))
+               if((ctg_length[hit_rddex[k]]>=n_length)&&(disdex < Dis_index[k])&&(ctg_rcindex[k]<2)&&(Dis_ratia1[k] > 1.02)&&(Dis_ratia2[k] > 1.02)&&(Dis_score1[k] >= d_score)&&(Dis_score2[k] >= d_score)&&(Dnd_score1[k]<=N_score)&&(Dnd_score2[k]<=N_score)&&(DS < 50))
                {
                  disdex = Dis_index[k];
                  OO_index1 = ctg_rcindex[k];
@@ -919,8 +1032,6 @@ void Matrix_Process(char **argv,int args,int nSeq)
               set1 = set1/len_thresd;
               set2 = set2/len_thresd;
               M_score = (set1+set2)*m_score*l_score;
-            if(i==76||i==254)
-              printf("score00: %d %f %f %f %f\n",i,M_score,disdex,set1,set2); 
             }
 
             dlinks[0] = rc0_matrix[i][hit_rddex[disidd]];
@@ -929,8 +1040,6 @@ void Matrix_Process(char **argv,int args,int nSeq)
             dlinks[3] = rc3_matrix[i][hit_rddex[disidd]];
             dlinks[4] = 0;
             Direction_Ratio(i,dlinks); 
-            if(i==76||i==254)
-              printf("score1: %d %f %f %d %d %d %d %d\n",i,M_score,disdex,dlinks[0],dlinks[1],dlinks[2],dlinks[3],dlinks[4]);
             if((disdex > M_score)&&(dlinks[4] == 1)) 
             {
                if(dlinks[0] == rc0_matrix[i][hit_rddex[disidd]])
@@ -967,12 +1076,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
                  rc_matrix[i][hit_rddex[disidd]] = 0;
                rc_matrix[hit_rddex[disidd]][i] = rc_matrix[i][hit_rddex[disidd]];
  
-               PP_matrix[i][ptp_list[i]] = hit_rddex[disidd];
                ptp_list[i]++;
-               PN_matrix[hit_rddex[disidd]][ptn_list[hit_rddex[disidd]]] = i;
-               if((hit_rddex[disidd] == 257)||(i == 257))
-                 printf("order: 1 %d %d %d %d\n",i,ptn_list[hit_rddex[disidd]],rcdex_matrix[i][hit_rddex[disidd]],rcdex_matrix[hit_rddex[disidd]][i]);
-               PO_matrix[hit_rddex[disidd]][ptn_list[hit_rddex[disidd]]] = rcdex_matrix[hit_rddex[disidd]][i];
                ptn_list[hit_rddex[disidd]]++;
                ctg_hitnum[i]++;
             }
@@ -998,7 +1102,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
                  else
                    DS = DS/DD_score1[k];
                }
-               if((ctg_length[hit_rddex[k]]>=n_length)&&(disdex2 < Dis_index[k])&&(ctg_rcindex[k]>=2)&&(Dis_ratia1[k] > 1.01)&&(Dis_ratia2[k] > 1.01)&&(Dis_score1[k] >= d_score)&&(Dis_score2[k] >= d_score)&&(Dnd_score1[k]<=N_score)&&(Dnd_score2[k]<=N_score)&&(DS < 50))
+               if((ctg_length[hit_rddex[k]]>=n_length)&&(disdex2 < Dis_index[k])&&(ctg_rcindex[k]>=2)&&(Dis_ratia1[k] > 1.02)&&(Dis_ratia2[k] > 1.02)&&(Dis_score1[k] >= d_score)&&(Dis_score2[k] >= d_score)&&(Dnd_score1[k]<=N_score)&&(Dnd_score2[k]<=N_score)&&(DS < 50))
                {
                  disdex2 = Dis_index[k];
                  OO_index2 = ctg_rcindex[k];
@@ -1023,8 +1127,6 @@ void Matrix_Process(char **argv,int args,int nSeq)
             dlinks[3] = rc3_matrix[i][hit_rddex[disidd]];
             dlinks[4] = 0;
             Direction_Ratio(i,dlinks); 
-            if(i==76||i==254)
-              printf("score2: %d %f %f %d %d %d %d %d\n",i,M_score,disdex2,dlinks[0],dlinks[1],dlinks[2],dlinks[3],dlinks[4]);
             if((disdex2 > M_score)&&(dlinks[4] == 1)) 
             {
                if(dlinks[0] == rc0_matrix[i][hit_rddex[disidd]])
@@ -1064,607 +1166,24 @@ void Matrix_Process(char **argv,int args,int nSeq)
                  rc_matrix[i][hit_rddex[disidd]] = 0;
                rc_matrix[hit_rddex[disidd]][i] = rc_matrix[i][hit_rddex[disidd]];
  
-               PP_matrix[i][ptp_list[i]] = hit_rddex[disidd];
                ptp_list[i]++;
-               PN_matrix[hit_rddex[disidd]][ptn_list[hit_rddex[disidd]]] = i;
-               if((hit_rddex[disidd] == 257)||(i == 257))
-                 printf("order: 2 %d %d %d %d\n",i,ptn_list[hit_rddex[disidd]],rcdex_matrix[i][hit_rddex[disidd]],rcdex_matrix[hit_rddex[disidd]][i]);
-               PO_matrix[hit_rddex[disidd]][ptn_list[hit_rddex[disidd]]] = rcdex_matrix[hit_rddex[disidd]][i];
                ptn_list[hit_rddex[disidd]]++;
                ctg_hitnum[i]++;
             }
-        } 
+        }
+      } 
      }
 
-     for(i=0;i<max_ctg;i++)
+           printf("Scaff: 1 %d \n",n_scaffs);
+     for(i=0;i<n_scaffs;i++)
      {
-        for(j=0;j<max_ctg;j++)
+        for(j=0;j<scf_list[i];j++)
         {
-           if((rcdex_matrix[j][i] > 0)&&(rcdex_matrix[i][j] == 0))
-           {
-             if(rcdex_matrix[j][i] == 1)
-               rcdex_matrix[i][j] = 4;
-             else if(rcdex_matrix[j][i] == 2)
-               rcdex_matrix[i][j] = 3; 
-             else if(rcdex_matrix[j][i] == 3)
-               rcdex_matrix[i][j] = 2; 
-             else if(rcdex_matrix[j][i] == 4)
-               rcdex_matrix[i][j] = 1; 
-           }
-           if((rcdex_matrix[j][i] == 0)&&(rcdex_matrix[i][j] > 0))
-           {
-             if(rcdex_matrix[i][j] == 1)
-               rcdex_matrix[j][i] = 4;
-             else if(rcdex_matrix[i][j] == 2)
-               rcdex_matrix[j][i] = 3; 
-             else if(rcdex_matrix[i][j] == 3)
-               rcdex_matrix[j][i] = 2; 
-             else if(rcdex_matrix[i][j] == 4)
-               rcdex_matrix[j][i] = 1; 
-           }
+           int idd = scf_head[i]+j;
+           if(ctg_inscf[ctg_index[idd]] > 0)
+             printf("Scaff: 2 %d %d %d %d %d %d \n",i,j,scf_index[idd],scf_length[idd],ctg_index[idd],scf_score[idd]);
         }
      }
-
-     for(k=0;k<max_ctg;k++)
-     {
-        if(ctg_hitnum[k] == 1)
-        {
-          int idi = ctg_mapp1[k];
-          if(ctg_mapp1[k] >= 0)
-          {
-            p_matrix[k][ctg_list[k]] = ctg_mapp1[k];
-            s_matrix[k][ctg_list[k]] = ctg_score1[k];
-            s2_matrix[k][ctg_mapp1[k]] = ctg_score1[k];
-            s2_matrix[ctg_mapp1[k]][k] = ctg_score1[k];
-            o_matrix[k][ctg_list[k]] = ctg_rcoo1[k];
-            ctg_list[k]++; 
-          }
-          else if(ctg_mapp2[k] >= 0)
-          {
-            p_matrix[k][ctg_list[k]] = ctg_mapp2[k];
-            s_matrix[k][ctg_list[k]] = ctg_score2[k];
-            s2_matrix[k][ctg_mapp2[k]] = ctg_score2[k];
-            s2_matrix[ctg_mapp2[k]][k] = ctg_score2[k];
-            o_matrix[k][ctg_list[k]] = ctg_rcoo2[k];
-            ctg_list[k]++;
-          } 
-          for(j=0;j<max_ctg;j++)
-          {
-             if((ctg_mapp1[j] == k)||(ctg_mapp2[j] == k))
-             {
-               int idi = ctg_hitnum[ctg_mapp1[j]];
-               int idj = ctg_hitnum[ctg_mapp2[j]];
-               printf("find the missing link: %d %d %d %d %d %d\n",k,j,ctg_mapp1[j],ctg_mapp2[j],idi,idj);
-             }
-          }
-        }
-        else if(ctg_hitnum[k] == 2)
-        {
-          p_matrix[k][ctg_list[k]] = ctg_mapp1[k];
-          s_matrix[k][ctg_list[k]] = ctg_score1[k];
-          s2_matrix[k][ctg_mapp1[k]] = ctg_score1[k];
-          s2_matrix[ctg_mapp1[k]][k] = ctg_score1[k];
-          o_matrix[k][ctg_list[k]] = ctg_rcoo1[k];
-          ctg_list[k]++;
-          p_matrix[k][ctg_list[k]] = ctg_mapp2[k];
-          s_matrix[k][ctg_list[k]] = ctg_score2[k];
-          s2_matrix[k][ctg_mapp2[k]] = ctg_score2[k];
-          s2_matrix[ctg_mapp2[k]][k] = ctg_score2[k];
-          o_matrix[k][ctg_list[k]] = ctg_rcoo2[k];
-          ctg_list[k]++;
-        }         
-     }
-
-     
-     for(k=0;k<max_ctg;k++)
-     {
-        int num_partner = 0;
-        int p_idi = -1;
-        int p_idk = -1;
-        int pscore1 = 0;         
-        int pscore2 = 0;         
-        int plists1 = 0;
-        int plists2 = 0;
-
-        for(j=0;j<max_ctg;j++)
-        {
-           for(i=0;i<ctg_list[j];i++)
-           {
-              if(p_matrix[j][i] == k)
-              {
-                p_index[num_partner] = j;
-                p_rcdex[num_partner] = o_matrix[j][i];
-                p_score[num_partner] = s_matrix[j][i];
-                p_lists[num_partner] = i;
-                num_partner++;
-              }
-           }
-
-           for(i=0;i<ctg_list[j];i++)
-           {
-              if(p_matrix[j][i] == k)
-                 printf("Missing link: %d %d | %d %d %d %d | %d %d || %d %d %d %d || %d %d\n",k,j,i,p_matrix[j][i],s_matrix[j][i],o_matrix[j][i],ctg_length[k],ctg_length[j],rc0_matrix[k][j],rc1_matrix[k][j],rc2_matrix[k][j],rc3_matrix[k][j],ctg_mapp1[k],ctg_mapp2[k]);
-           }
-        }
-
-        if(num_partner > 0)
-        {
-          for(i=0;i<num_partner;i++)
-          {
-             if((p_rcdex[i]%2) == 0)
-             {
-               if(p_score[i] > pscore1)
-               {
-                 p_idi = i;
-                 pscore1 = p_score[i];
-                 plists1 = p_lists[i];
-               } 
-             }
-             else
-             {
-               if(p_score[i] > pscore2)
-               {
-                 p_idk = i;
-                 pscore2 = p_score[i];
-                 plists2 = p_lists[i];
-               }
-             } 
-          }  
-        }
-
-        if(p_idi >= 0)
-        {
-          j = p_index[p_idi];
-          i = plists1;
-          if((o_matrix[j][i] == 1)||(o_matrix[j][i] == 2))
-            ctg_oodex1[k] = 0;
-          else
-            ctg_oodex1[k] = 1;
-          rc_matrix[k][j] = ctg_oodex1[k];
-          rc_matrix[j][k] = ctg_oodex1[k];
-          ctg_part1[k] = j;
-          if(k == 75)
-            printf("Equal:1 %d %d | %d %d\n",k,j,ctg_part1[k],ctg_part2[k]);
-          ctg_patnum[k]++; 
-          ctg_links[k]++; 
-          printf("Partner_1: %d %d %d | %d %d | %d %d || %d %d %d %d %d\n",k,j,i,s_matrix[j][i],o_matrix[j][i],ctg_length[k],ctg_length[j],rc0_matrix[k][i],rc1_matrix[k][i],rc2_matrix[k][i],rc3_matrix[k][i],ctg_mapp1[k]);
-        }
-        if(p_idk >= 0)
-        {
-          j = p_index[p_idk];
-          i = plists2;
-          if((o_matrix[j][i] == 1)||(o_matrix[j][i] == 2))
-            ctg_oodex2[k] = 0;
-          else
-            ctg_oodex2[k] = 1;
-          rc_matrix[k][j] = ctg_oodex2[k];
-          rc_matrix[j][k] = ctg_oodex2[k];
-          ctg_part2[k] = j;
-          if(k == 75)
-            printf("Equal: %d %d | %d %d\n",k,j,ctg_part1[k],ctg_part2[k]);
-          ctg_patnum[k]++; 
-          ctg_links[k]++; 
-          if(j != ctg_mapp2[k])
-          {
-            ctg_part1[j] = ctg_mapp2[k]; 
-                 printf("PPPpartner: %d %d | %d %d\n",k,j,ctg_mapp1[k],ctg_mapp2[k]);
-          }
-          printf("Partner_2: %d %d %d | %d %d | %d %d || %d %d %d %d %d\n",k,j,i,s_matrix[j][i],o_matrix[j][i],ctg_length[k],ctg_length[j],rc0_matrix[k][j],rc1_matrix[k][j],rc2_matrix[k][j],rc3_matrix[k][j],ctg_mapp2[k]);
-        }
-        for(i=0;i<ctg_list[k];i++)
-        {
-              printf("link: %d %d %d %d %d\n",k,i,ctg_list[k],p_matrix[k][i],s_matrix[k][i]);
-        }
-     }
-
-
-     for(k=0;k<max_ctg;k++)
-     {
-        for(i=0;i<ctg_list[i];i++)
-           printf("k-428: %d %d %d %d | %d %d | %d %d\n",k,i,ctg_list[k],p_matrix[k][i],ctg_mapp1[k],ctg_mapp2[k],ctg_part1[k],ctg_part2[k]);
-     }
-     for(k=0;k<max_ctg;k++)
-     {
-        if(ptp_list[k] == 2)
-        {
-          if(ptn_list[k] == 0)
-          {
-            ctg_print[k] = 1;
-            ctg_print[PP_matrix[k][0]] = 1;
-            ctg_print[PP_matrix[k][1]] = 1;
-            printf("next:1 %d %d %d %d %d || %d\n",k,ctg_part1[k],ctg_part2[k],PP_matrix[k][0],PP_matrix[k][1],ptn_list[k]);
-            ctg_part1[k] = PP_matrix[k][0];
-            ctg_part2[k] = PP_matrix[k][1];
-          }
-          else if(ptn_list[k] == 1)
-          {
-            if((PN_matrix[k][0] == PP_matrix[k][0])||(PN_matrix[k][0] == PP_matrix[k][1]))
-            {
-              ctg_print[k] = 1;
-              ctg_print[PP_matrix[k][0]] = 1;
-              ctg_print[PP_matrix[k][1]] = 1;
-            printf("next:2 %d %d %d %d %d || %d\n",k,ctg_part1[k],ctg_part2[k],PP_matrix[k][0],PP_matrix[k][1],ptn_list[k]);
-              ctg_part1[k] = PP_matrix[k][0];
-              ctg_part2[k] = PP_matrix[k][1];
-            }
-          }
-          else if(ptn_list[k] == 2)
-          {
-            if((PN_matrix[k][0] == PP_matrix[k][0])&&(PN_matrix[k][1] == PP_matrix[k][1]))
-            {
-              ctg_print[k] = 1;
-              ctg_print[PP_matrix[k][0]] = 1;
-              ctg_print[PP_matrix[k][1]] = 1;
-            printf("next:3 %d %d %d %d %d || %d\n",k,ctg_part1[k],ctg_part2[k],PP_matrix[k][0],PP_matrix[k][1],ptn_list[k]);
-              ctg_part1[k] = PP_matrix[k][0];
-              ctg_part2[k] = PP_matrix[k][1];
-            }
-            else if((PN_matrix[k][0] == PP_matrix[k][1])&&(PN_matrix[k][1] == PP_matrix[k][0]))
-            {
-              ctg_print[k] = 1;
-              ctg_print[PP_matrix[k][0]] = 1;
-              ctg_print[PP_matrix[k][1]] = 1;
-            printf("next:4 %d %d %d %d %d || %d\n",k,ctg_part1[k],ctg_part2[k],PP_matrix[k][0],PP_matrix[k][1],ptn_list[k]);
-              ctg_part1[k] = PP_matrix[k][0];
-              ctg_part2[k] = PP_matrix[k][1];
-            }
-          }
-        }
-        else if(ptp_list[k] == 1)
-        {
-          if(ptn_list[k] == 1)
-          {
-            if((ptn_list[k] == 1)&&(PP_matrix[k][0]==PN_matrix[k][0]))
-            {
-              ctg_print[k] = 1;
-              ctg_print[PP_matrix[k][0]] = 1;
-            printf("next:5 %d %d %d %d %d || %d\n",k,ctg_part1[k],ctg_part2[k],PP_matrix[k][0],PP_matrix[k][1],ptn_list[k]);
-              if(PP_matrix[k][0] != ctg_part2[k])
-                ctg_part1[k] = PP_matrix[k][0];
-            } 
-          }
-        }
-     }
-
-     for(k=0;k<max_ctg;k++)
-     {
-        printf("PPmatrix: %d %d | %d %d | %d %d %d || ",k,ptp_list[k],ctg_part1[k],ctg_part2[k],ptn_list[k],ctg_patnum[k],ctg_print[k]);
-//        printf("PPmatrix: %d %d | %d %d %d || ",k,ptp_list[k],ptn_list[k],ctg_patnum[k],ctg_print[k]);
-        for(i=0;i<ptp_list[k];i++)
-           printf("%d ",PP_matrix[k][i]);
-        printf("|| ");
-        for(i=0;i<ptn_list[k];i++)
-           printf("%d ",PN_matrix[k][i]);
-        printf("& ");
-        for(i=0;i<ptn_list[k];i++)
-           printf("%d ",PO_matrix[k][i]);
-        printf("\n");
-
-     }
-
-     for(k=0;k<max_ctg;k++)
-     {
-        if((ptn_list[k] == 1)&&(ptp_list[k] == 2))
-        {
-          if(PN_matrix[k][0] == PP_matrix[k][0])
-          {
-            ctg_print[k] = 1;
-            ctg_print[PP_matrix[k][1]] = 1;
-            PN_matrix[k][1] = PP_matrix[k][1];
-            PO_matrix[k][1] = rcdex_matrix[k][PP_matrix[k][1]];
-            ptn_list[k]++;
-          }
-          else if(PN_matrix[k][0] == PP_matrix[k][1])
-          {
-            ctg_print[k] = 1;
-            ctg_print[PP_matrix[k][0]] = 1;
-            PN_matrix[k][1] = PP_matrix[k][0];
-            PO_matrix[k][1] = rcdex_matrix[k][PP_matrix[k][0]];
-            ptn_list[k]++;
-          }
-        }
-        else if((ptn_list[k] == 0)&&(ptp_list[k] == 1))
-        {
-            ctg_print[k] = 1;
-            ctg_print[PP_matrix[k][0]] = 1;
-            PN_matrix[k][0] = PP_matrix[k][0];
-            PO_matrix[k][0] = rcdex_matrix[k][PP_matrix[k][0]];
-            ptn_list[k]++;
-        }
-        else if((ptn_list[k] == 0)&&(ptp_list[k] == 2))
-        {
-            ctg_print[k] = 1;
-            ctg_print[PP_matrix[k][0]] = 1;
-            ctg_print[PP_matrix[k][1]] = 1;
-            PN_matrix[k][0] = PP_matrix[k][0];
-            PO_matrix[k][0] = rcdex_matrix[k][PP_matrix[k][0]];
-            ptn_list[k]++;
-            PN_matrix[k][1] = PP_matrix[k][1];
-            PO_matrix[k][1] = rcdex_matrix[k][PP_matrix[k][1]];
-            ptn_list[k]++;
-        }
-     }
-
-     for(k=0;k<max_ctg;k++)
-     {
-        printf("PPmatrix2: %d %d | %d %d | %d %d %d || ",k,ptp_list[k],ctg_part1[k],ctg_part2[k],ptn_list[k],ctg_patnum[k],ctg_print[k]);
-//        printf("PPmatrix: %d %d | %d %d %d || ",k,ptp_list[k],ptn_list[k],ctg_patnum[k],ctg_print[k]);
-        for(i=0;i<ptp_list[k];i++)
-           printf("%d ",PP_matrix[k][i]);
-        printf("|| ");
-        for(i=0;i<ptn_list[k];i++)
-           printf("%d ",PN_matrix[k][i]);
-        printf("& ");
-        for(i=0;i<ptn_list[k];i++)
-           printf("%d ",PO_matrix[k][i]);
-        printf("\n");
-
-     }
-
-     if((namef = fopen(argv[args+1],"w")) == NULL)
-     {
-       printf("ERROR main:: alignment file 2 \n");
-       exit(1);
-     }
-
-          n_scaff = 0;
-          for(k=0;k<max_ctg;k++)
-          {
-            int tbase = 0;
-            int print_tag = 0;
-
-            if(ptp_list[k] == 1)
-            {
-              if(ptn_list[k] == 1)
-              {
-                if((ptn_list[k] == 1)&&(PP_matrix[k][0]==PN_matrix[k][0]))
-                  print_tag = 1;
-              }
-            }
-//             if(k==i_getindex)
-               printf("===========\n");
-               printf("hhh: %d %d %d %d\n",k,ctg_patnum[k],ctg_output[k],ptn_list[k]);
-            if((ptn_list[k]==0)&&(ctg_output[k]==0))
-            {
-              printf("supercontig1: tarseq_%d %d %d\n",k,k,ctg_patnum[k]);
-              fprintf(namef,"contig-1:%08d %d %d %d 0 0\n",0,n_scaff,k,ctg_length[k]);
-              printf("contig-1: %d %d %d 0 0\n",n_scaff,k,ctg_length[k]);
-              tbase = ctg_length[k];
-              printf("bases: %d %d %d\n",k,n_scaff,tbase);
-              ctg_output[k] = 1;
-              n_scaff++;
-            }
-            else if((print_tag==1)&&(ptn_list[k]==1)&&(ctg_output[k]==0))
-            {
-             int idd = k;
-             int idk = k;
-             int stopflag=0;
-             int num_loops=0;
-
-//             if(k==i_getindex)
-//             while(((ctg_part1[idd] >= 0)||(ctg_part2[idd] >= 0))&&((stopflag == 0)&&(ctg_links[idk]>0)&&(ctg_mask[idk]==0)&&(idk >= 0)&&(idd >= 0)))
-//             while((ctg_print[idd] == 1)&&((stopflag == 0)&&(ctg_links[idk]>0)&&(ctg_mask[idk]==0)&&(idk >= 0)&&(idd >= 0)))
-             while((ctg_print[idd] == 1)&&((stopflag == 0)&&(ctg_mask[idk]==0)&&(idk >= 0)&&(idd >= 0)))
-             {
-               int rc_idk = -1;
-               int rc_idi = 0;
-               printf("xxx: %d %d %d %d %d %d %d %d\n",k,idd,idk,ptn_list[k],ctg_used[k],ctg_used[idd],ctg_part1[idd],ctg_part2[idd]);
-               if(ctg_used[idk] == 0)
-               {
-             printf("hits: %d %d %d %d %d %d %d %d\n",k,idd,idk,ptn_list[idd],ctg_used[k],ctg_used[idd],ctg_part1[idd],ctg_part2[idd]);
-                 if(ctg_used[idd] == 0)
-                 {
-                   int min_len = 2000000000;
-                   int min_idd = 0;
-                   int cono = 0;
-
-                   if(ptn_list[idd] == 1)
-                   {
-                     idk = PN_matrix[idd][0];
-                     if((PO_matrix[idd][0] >= 2)&&(PO_matrix[idd][0] <= 3))
-                       rc_idk = 0;
-                     else
-                       rc_idk = 1;
-                   }
-                   else
-                   {
-                     for(m=0;m<ptn_list[idd];m++)
-                     {
-                        int rdex = PN_matrix[idd][m];
-
-                        if(ctg_used[rdex] == 1)
-                        {
-                          if((PO_matrix[idd][m]%2) == 0)
-                            cono = 2;
-                          else
-                            cono = 1; 
-                        }
-             printf("hits1: %d %d %d %d %d %d %d %d\n",m,idd,idk,ptn_list[idd],ctg_used[rdex],PO_matrix[idd][m],rdex,cono);
-                     }
-             printf("hits2: %d %d %d %d %d %d %d %d\n",k,idd,idk,ptn_list[idd],ctg_used[k],ctg_used[idd],ctg_part1[idd],cono);
-                     for(m=0;m<ptn_list[idd];m++)
-                     {
-                        int rdex = PN_matrix[idd][m];
-                        int cdex = ctg_part2[rdex];
-                        int mono;
-                      
-                        mono = 0;
-                      printf("hhh-: %d %d %d %d %d | %d %d || %d %d \n",m,rdex,idd,idk,ctg_used[rdex],cono,mono,ctg_part1[rdex],ctg_part2[rdex]);
-                        if((ctg_length[rdex] < min_len)&&(ctg_used[rdex] == 0))
-                        {
-                      printf("hhh0: %d %d %d %d %d | %d %d || %d %d \n",m,rdex,idd,idk,ctg_used[rdex],cono,mono,ctg_part1[rdex],PO_matrix[idd][m]);
-                          if((PO_matrix[idd][m]%2) == 0)
-                            mono = 2;
-                          else
-                            mono = 1;
-                          if(cono != mono)
-                          {
-                            min_len = ctg_length[rdex];
-                            min_idd = m;
-                            idk = PN_matrix[idd][m];
-                            if((PO_matrix[idd][m] >= 2)&&(PO_matrix[idd][m] <= 3))
-                              rc_idk = 0;
-                            else
-                              rc_idk = 1;
-                          } 
-                        }
-                      printf("hhh1: %d %d %d %d %d %d %d || %d %d \n",m,rdex,idd,idk,ctg_used[rdex],ctg_used[idk],ptn_list[idd],ctg_part1[rdex],ctg_part2[rdex]);
-                     }
-                   }
-                 }
-                 printf("hhhx: %d %d %d %d %d %d | %d %d\n",k,idd,idk,ctg_part1[idd],ctg_part2[idd],rc_idk,ctg_used[idd],ctg_used[idk]);
-                 if((ptn_list[k]==1)&&(ctg_used[k]==0)&&(ctg_print[k] == 1))
-                 {
-                   printf("supercontig2: tarseq_%d %d %d %d %d %d\n",k,idd,idk,rc_idk,ctg_rcdex1[k],ctg_patnum[k]);
-                   if(rc_idk==0)
-                   {
-                     if(rcdex_matrix[k][idk] == 1)
-                     {
-                       fprintf(namef,"contigg1:%08d %d %d %d 1 2\n",0,n_scaff,k,ctg_length[k]);
-                       printf("contigg1: %d %d %d 0 %d\n",n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                     }
-                     else if(rcdex_matrix[k][idk] == 3)
-                     {
-                       fprintf(namef,"contigg1:%08d %d %d %d 0 3\n",0,n_scaff,k,ctg_length[k]);
-                       printf("contigg1: %d %d %d 1 %d\n",n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                     }
-                     else
-                     {
-                       fprintf(namef,"contigg1:%08d %d %d %d 0 %d\n",0,n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                       printf("contigg1: %d %d %d 0 %d\n",n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                     }
-                     ctg_output[k] = 1;
-                     ctg_outrc[k] = 0;
-                     if(idk!=k)
-                     {
-                       if((ctg_output[idk] == 0)&&(idk >= 0))
-                       {
-                         fprintf(namef,"contigg2:%08d %d %d %d 0 0\n",s2_matrix[k][idk],n_scaff,idk,ctg_length[idk]);
-                         printf("contigg2: %d %d %d 0 0\n",n_scaff,idk,ctg_length[idk]);
-                         ctg_outrc[idk] = 0;
-                         ctg_part2[k] = idk;
-                         ctg_part1[idk] = k;
-                       }
-                       ctg_output[idk] = 1;
-                     }
-                   }
-                   else if(rc_idk==1)
-                   {
-                     fprintf(namef,"contigg1:%08d %d %d %d 0 %d\n",0,n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                     printf("contigg1: %d %d %d 0 %d\n",n_scaff,k,ctg_length[k],rcdex_matrix[k][idk]);
-                     ctg_output[k] = 1;
-                     ctg_outrc[k] = 0;
-                     if(idk!=k)
-                     {
-                       if((ctg_output[idk] == 0)&&(idk >= 0))
-                       {
-                         fprintf(namef,"contigg2:%08d %d %d %d 1 0\n",s2_matrix[k][idk],n_scaff,idk,ctg_length[idk]);
-                         printf("contigg2: %d %d %d 1 0\n",n_scaff,idk,ctg_length[idk]);
-                         ctg_outrc[idk] = 1;
-                         ctg_part2[k] = idk;
-                         ctg_part1[idk] = k;
-                       }
-                       ctg_output[idk] = 1;
-                     }
-                   }
-                   else
-                   {
-                     fprintf(namef,"contigg1:%08d %d %d %d 0 4\n",0,n_scaff,k,ctg_length[k]);
-                     printf("contigg1: %d %d %d 0 0\n",n_scaff,k,ctg_length[k]);
-                     ctg_output[k] = 1;
-                   }
-                   tbase = tbase + ctg_length[k];
-                   if(idk!=k)
-                     tbase = tbase + ctg_length[idk];
-                   ctg_used[k] = 0;
-                   num_loops++;
-                 }
-                 else if((ctg_print[idd]==1)&&(idd!=idk))
-                 {
-                   int rc_idd = 0;
-                   int rc_ide = 0;
-
-//                   if(idk>=0)
-                   tbase = tbase + ctg_length[idk];
-                   if(rc_idk==0)
-                     rc_idd = 0;
-                   else if(rc_idk==1)
-                     rc_idd = 1;
-                   else if(rc_idk==2)
-                     rc_idd = 0;
-                   else if(rc_idk==3)
-                     rc_idd = 1;
-                   if(rc_idd!=rc_idi)
-                     rc_ide = 1;
-                   else
-                     rc_ide = 0;
-                   if(ctg_output[idk] == 0)
-                   {
-                     int outrc = 0;
-                     if(ctg_outrc[idd] == 0)
-                       outrc = rc_matrix[idd][idk];
-                     else
-                     {
-                       if(rc_matrix[idd][idk] == 0)
-                         outrc = 1;
-                       else
-                         outrc = 0;
-                     }
-                     ctg_outrc[idk] = outrc;
-                     if(idk >= 0)
-                     {
-                       fprintf(namef,"contig-0:%08d %d %d %d %d 0\n",s2_matrix[idd][idk],n_scaff,idk,ctg_length[idk],outrc);
-/*
-                       fprintf(namef,"         PP: %d %d %d ",n_scaff,idk,ptn_list[idk]);
-                       for(m=0;m<ptn_list[idk];m++)
-                          fprintf(namef,"%d ",PN_matrix[idk][m]);
-                       fprintf(namef,"|| ");
-                       for(m=0;m<ptn_list[idk];m++)
-                          fprintf(namef,"%d ",PO_matrix[idk][m]);
-                       fprintf(namef,"\n");
-            */
-                       printf("contig-0: %d %d %d %d || %d %d %d %d %d\n",n_scaff,idk,ctg_length[idk],outrc,idd,idk,ctg_outrc[idd],ctg_outrc[idk],rc_matrix[idd][idk]);
-                       ctg_part2[idd] = idk;
-                       ctg_part1[idk] = idd;
-                     }
-                   }
-                   ctg_output[idk] = 1;
-                   rc_idi = rc_ide;       
-                   num_loops++;
-                 }
-//             if(idd==i_getindex)
-               printf("hhh3: %d %d %d\n",k,idd,idk);
-                 ctg_used[k] = 1;
-                 ctg_used[idd] = 1;
-                 idd = idk;
-               }
-               else
-                 stopflag=1;
-               if(stopflag == 1)
-                 break;
-               printf("hhh-xxx: %d %d %d %d %d %d %d\n",k,idd,idk,stopflag,ctg_print[idd],ctg_links[idk],ctg_mask[idk]);
-             }
-             if(tbase == 0)
-               tbase = ctg_length[idk];
-             if(num_loops != 0)
-               printf("bases: %d %d %d\n",idk,n_scaff,tbase);
-             n_scaff++;
-            }
-          }
-          for(k=0;k<max_ctg;k++)
-          {
-             int tbase = 0;
-             if(ctg_output[k] == 0)
-             {
-               printf("supercontig3: tarseq_%d %d %d\n",k,k,ctg_patnum[k]);
-               fprintf(namef,"contig-n:%08d %d %d %d 0 0\n",0,n_scaff,k,ctg_length[k]);
-               printf("contig-n: %d %d %d 0 0\n",n_scaff,k,ctg_length[k]);
-               tbase = ctg_length[k];
-               printf("bases: %d %d %d\n",k,n_scaff,tbase);
-               n_scaff++;
-             }
-          }
-     fclose(namef);
 }
 
 /* ========================================================= */
@@ -1767,7 +1286,7 @@ void Direction_Ratio(int nSeq,int *dlinks)
 
      mf1 = dlinks[1];
      mf1 = mf1/dlinks[0];
-     if(mf1 > 0.98)
+     if(mf1 > 0.9)
        dlinks[4] = 0;
      else
        dlinks[4] = 1;

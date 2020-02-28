@@ -36,11 +36,9 @@
 
 #define PADCHAR '-'
 #define Max_N_NameBase 60
-static char **R_Name;
+static char **S_Name,**R_Name;
 static int *hit_rddex,*hit_score,*hit_rcdex,*hit_locus1,*superlength,*hit_matlocu1,*hit_matlocu2,*hit_matindex;
 static int *ctg_length,*hit_index,*hit_masks,*hit_linkdex1,*hit_linkdex2;;
-static int *scf_offset,*scf_length,*ctg_index,*ctg_scaffs,*ctg_offset,*ctg_mscore;
-static int *scf_index,*ctg_gaplen,*hit_tscore,*ctg_scaffs,*ctg_rcdex,*ctg_offset,*ctg_mscore;
 
 /* SSAS default parameters   */
 static int IMOD=0;
@@ -48,25 +46,23 @@ static int nContig=0;
 static int file_flag = 1;
 static int min_len = 100000;
 static int max_ctg = 1000000;
-static int Gap_len = 200;
-static int read_len = 150;
 static int n_depth = 60;
 static float m_score = 400.0;
 static int i_getindex = 2;
 
 int main(int argc, char **argv)
 {
-    FILE *namef,*namef2;
-    int i,j,nSeq,args,idt,rcdex;
-    int n_contig,n_reads,nseq,iscaf1,idd1,offset1;
-    int stopflag;
+    FILE *namef;
+    int i,nSeq,args,idt;
+    int n_contig,n_reads,nseq;
+    void Matrix_Process(char **argv,int args,int nSeq);
     char *st,*ed;
     char line[2000]={0},tempc1[60],rdname[60];
     char **cmatrix(long nrl,long nrh,long ncl,long nch);
 
     if(argc < 2)
     {
-      printf("Usage: %s <Input_HiC-alignment> <input_scaff_agp> <Output_HiC-alignment>\n",argv[0]);
+      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
 
       exit(1);
     }
@@ -87,7 +83,7 @@ int main(int argc, char **argv)
        }
        else if(!strcmp(argv[i],"-len"))
        {
-         sscanf(argv[++i],"%d",&Gap_len);
+         sscanf(argv[++i],"%d",&min_len);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-score"))
@@ -131,38 +127,29 @@ int main(int argc, char **argv)
     }
     fclose(namef); 
 
-    n_contig=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
+    if((hit_rddex = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("ERROR main:: args \n");
+      printf("fmate: calloc - insert\n");
       exit(1);
     }
-    while(!feof(namef))
-    {
-      if(fgets(line,2000,namef) == NULL)
-      {
-//        printf("fgets command error:\n);
-      }
-      if(feof(namef)) break;
-      n_contig++;
-    }
-    fclose(namef); 
-
-
-
     if((hit_score = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
       printf("fmate: calloc - hit_score\n");
       exit(1);
     }
-    if((hit_tscore = (int *)calloc(nseq,sizeof(int))) == NULL)
+    if((hit_rcdex = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
-      printf("fmate: calloc - hit_tscore\n");
+      printf("fmate: calloc - hit_rcdex\n");
       exit(1);
     }
     if((hit_locus1 = (int *)calloc(nseq,sizeof(int))) == NULL)
     {
       printf("fmate: calloc - hit_locus1\n");
+      exit(1);
+    }
+    if((ctg_length = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - ctg_length\n");
       exit(1);
     }
     if((superlength = (int *)calloc(nseq,sizeof(int))) == NULL)
@@ -175,9 +162,17 @@ int main(int argc, char **argv)
       printf("fmate: calloc - hit_index\n");
       exit(1);
     }
+    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
+    {
+      printf("fmate: calloc - hit_masks\n");
+      exit(1);
+    }
 
     nSeq=nseq;
     R_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
+    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
+    n_contig=0;
+    n_reads=0;
 
     printf("reads: %d %s\n",nseq,argv[args]);
     if((namef = fopen(argv[args],"r")) == NULL)
@@ -189,155 +184,593 @@ int main(int argc, char **argv)
 /*  read the alignment files         */
     i=0;
     max_ctg = 0;
-    while(fscanf(namef,"%s %s %d %d %d %d",R_Name[i],rdname,&hit_locus1[i],&hit_score[i],&hit_tscore[i],&superlength[i])!=EOF)
+    while(fscanf(namef,"%s %s %d %d %s %d",R_Name[i],rdname,&hit_locus1[i],&hit_score[i],tempc1,&superlength[i])!=EOF)
     {
         st = rdname;
         ed = strrchr(rdname,'_');
         idt = atoi(ed+1);
+        if(idt > max_ctg)
+          max_ctg = idt;
+        ctg_length[idt] = superlength[i];
         hit_index[i] = idt;
         i++;
     }
     fclose(namef);
-    n_reads = i;
 
-    printf("reads: %d %d %s\n",nseq,n_reads,argv[args]);
-    if((ctg_index = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_index\n");
-      exit(1);
-    }
-    if((scf_index = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - scf_index\n");
-      exit(1);
-    }
-    if((scf_length = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - scf_index\n");
-      exit(1);
-    }
-    if((ctg_offset = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_offset\n");
-      exit(1);
-    }
-    if((ctg_length = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_offset\n");
-      exit(1);
-    }
-    if((ctg_gaplen = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_gaplen\n");
-      exit(1);
-    }
-    if((ctg_rcdex = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_rcdex\n");
-      exit(1);
-    }
-    if((ctg_mscore = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_mscore\n");
-      exit(1);
-    }
-    if((ctg_scaffs = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_scaffs\n");
-      exit(1);
-    }
-    if((scf_offset = (int *)calloc(n_contig,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - ctg_scaffs\n");
-      exit(1);
-    }
+    n_reads=i;
+    Matrix_Process(argv,args,n_reads);
 
-    if((namef = fopen(argv[args+1],"r")) == NULL)
-    {
-      printf("ERROR main:: reads group file \n");
-      exit(1);
-    }
-
-/*  read the alignment files         */
-    i=0;
-    while(fscanf(namef,"%s %d %d %d %d %d %d",rdname,&ctg_index[i],&ctg_length[i],&ctg_offset[i],&ctg_gaplen[i],&rcdex,&ctg_mscore[i])!=EOF)
-    {
-        st = rdname;
-        ed = strrchr(rdname,'_');
-        idt = atoi(ed+1);
-        scf_index[ctg_index[i]] = idt;
-        scf_length[idt] = scf_length[idt]+ctg_length[i]+ctg_gaplen[i];
-        scf_offset[ctg_index[i]] = ctg_offset[i];
-        ctg_scaffs[ctg_index[i]] = idt;
-        ctg_rcdex[ctg_index[i]] = rcdex;
-        i++;
-    }
-    fclose(namef);
-    
     nseq=0;
-    if((namef = fopen(argv[args+2],"w")) == NULL)
+    if((namef = fopen(argv[args],"r")) == NULL)
     {
       printf("ERROR main:: args \n");
       exit(1);
     }
-
-
-    for(i=0;i<(n_reads-1);i++)
+    while(!feof(namef))
     {
-       stopflag=0;
-       j=i+1;
-       while((j<n_reads)&&(stopflag==0))
-       {
-         if(strcmp(R_Name[i],R_Name[j])==0)
-         {
-           j++;
-         }
-         else
-           stopflag=1;
-       }
-       if((j-i)==2) 
-       {
-         int iscaf = scf_index[hit_index[i]];
-         int offset  = 0;
-         int idd = hit_index[i];
-         idd1 = hit_index[i+1];;
-         iscaf1 = scf_index[hit_index[i+1]];;
-
-//       if(iscaf == 8)
-//       printf("%s tarseq_%d %d %d %d %d %d %d\n",R_Name[i],iscaf,offset,hit_score[i],hit_tscore[i],scf_length[iscaf]-Gap_len,hit_index[i],iscaf);
-         if(iscaf1 != iscaf)
-         {
-           if(ctg_rcdex[idd] == 0)
-             offset = hit_locus1[i]+scf_offset[idd]; 
-           else
-             offset = superlength[i] - hit_locus1[i]+scf_offset[idd]-read_len;
-           if(offset < 0)
-             offset = -offset; 
-           if(ctg_rcdex[idd1] == 0)
-             offset1 = hit_locus1[i+1]+scf_offset[idd1]; 
-           else
-             offset1 = superlength[i+1] - hit_locus1[i+1]+scf_offset[idd1]-read_len;
-           if(offset1 < 0)
-             offset1 = -offset1; 
-//      if((scf_length[iscaf1]-Gap_len) < 0)
-//        printf("%s tarseq_%d %d %d %d %d %d %d %d\n",R_Name[i+1],iscaf1,offset1,ctg_rcdex[idd],ctg_rcdex[idd1],scf_length[iscaf1]-Gap_len,scf_length[iscaf1],hit_locus1[i],scf_offset[idd]); 
-           fprintf(namef,"%s tarseq_%d %d %d %d %d\n",R_Name[i],iscaf,offset,hit_score[i],hit_tscore[i],scf_length[iscaf]-Gap_len);
-           fprintf(namef,"%s tarseq_%d %d %d %d %d\n",R_Name[i+1],iscaf1,offset1,hit_score[i+1],hit_tscore[i+1],scf_length[iscaf1]-Gap_len);
-         }
-       }
-       else
-       {
-//         printf("www: %s %d %d\n",R_Name[i],hit_read2[i],superlength[i]);
-       }
-       i=j-1;
+      if(fgets(line,2000,namef) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
+      if(feof(namef)) break;
+//        printf("%d %d %s",nseq,hit_score[nseq],line);
+      if(hit_score[nseq] == 0)
+        printf("%s",line);
+      nseq++;
     }
     fclose(namef); 
 
-    printf("Job finished for %d reads!\n",n_reads);
+    printf("Job finished for %d reads!\n",nSeq);
     return EXIT_SUCCESS;
 
 }
 /* end of the main */
+
+/*   subroutine to sort out read pairs    */
+/* =============================== */
+void Matrix_Process(char **argv,int args,int nSeq)
+/* =============================== */
+{
+     int i,j,k,m,n,n_scaff;
+     FILE *namef,*namef2;
+     int *ctg_list;
+     long num_cells,n_Bases,ii,n_blocks;
+     int num_hits,num_hit1,num_hit2,rcdex,rsize,rsize2,size_row;
+     int stopflag,offset,*ray,*dex1,*dex2;
+     void ArraySort_Mix(int n, long *arr, int *brr);
+     void ArraySort_float2(int n, float *arr, int *brr);
+     char **DBname,*st,*ed,line[2000];
+     void PCRdup_Process(char **argv,int args,int nSeq,int offset1,int offset2);
+     int **p_matrix,**s_matrix,**s2_matrix,**o_matrix,**r_matrix,**rc0_matrix,**rc1_matrix,**rc2_matrix,**rc3_matrix,**rc_matrix;
+     float rate,*Dis_index,*Dis_ratia1,*Dis_ratia2;
+     int **imatrix(long nrl,long nrh,long ncl,long nch);
+     float **fmatrix(long nrl,long nrh,long ncl,long nch);
+     void ArraySort2_Int2(int n, int *arr, int *brr);
+     void ArraySort_Int2(int n, int *arr, int *brr);
+     int *ctg_score1,*ctg_score2,*ctg_mapp1,*ctg_mapp2,*ctg_join1,*ctg_join2,*ctg_idex1,*ctg_idex2,*ctg_mask,*ctg_rcdex1;
+     int *p_index,*p_rcdex,*p_masks,*p_score,*p_lists;
+     int *ctg_rcoo1,*ctg_rcoo2,*ctg_part1,*ctg_part2,*ctg_patnum;
+     int *ctg_output,*ctg_hitnum,*ctg_used,*ctg_links,*ctg_oodex1,*ctg_oodex2,*ctg_rcindex,*ctg_mpindex,*ctg_outrc;
+     int *link_locus,*link_locu2,*link_locu3,*head_locus;
+     int n_length = min_len;
+
+     rsize = max_ctg+10; 
+     n_blocks = rsize*rsize; 
+     printf("Memory: %ld %d %d\n",n_blocks,max_ctg,rsize);
+     if((ctg_idex1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_idex1\n");
+       exit(1);
+     }
+     if((ctg_idex2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_idex2\n");
+       exit(1);
+     }
+     if((ctg_rcdex1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_mapp1\n");
+       exit(1);
+     }
+     if((ctg_mapp1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_mapp1\n");
+       exit(1);
+     }
+     if((ctg_mapp2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_mapp2\n");
+       exit(1);
+     }
+     if((ctg_part1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_part1\n");
+       exit(1);
+     }
+     if((ctg_part2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_part2\n");
+       exit(1);
+     }
+     if((ctg_score1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_score1\n");
+       exit(1);
+     }
+     if((ctg_score2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_score2\n");
+       exit(1);
+     }
+     if((ctg_join1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_join1\n");
+       exit(1);
+     }
+     if((ctg_join2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_join2\n");
+       exit(1);
+     }
+     if((ctg_mask = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_mask\n");
+       exit(1);
+     }
+     if((ctg_oodex1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_oodex1\n");
+       exit(1);
+     }
+     if((ctg_oodex2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_oodex2\n");
+       exit(1);
+     }
+     if((ctg_rcoo1 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_rcoo1\n");
+       exit(1);
+     }
+     if((ctg_rcoo2 = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_rcoo2\n");
+       exit(1);
+     }
+     if((ctg_hitnum = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_hitnum\n");
+       exit(1);
+     }
+     if((ctg_patnum = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_pattnum\n");
+       exit(1);
+     }
+     if((ctg_output = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_output\n");
+       exit(1);
+     }
+     if((ctg_used = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_used\n");
+       exit(1);
+     }
+     if((ctg_links = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_links\n");
+       exit(1);
+     }
+     if((ctg_rcindex = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_rcindex\n");
+       exit(1);
+     }
+     if((ctg_outrc = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_outrc\n");
+       exit(1);
+     }
+     if((ctg_list = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_list\n");
+       exit(1);
+     }
+     if((ctg_mpindex = (int *)calloc(rsize,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_mpindex\n");
+       exit(1);
+     }
+     if((Dis_index = (float *)calloc(rsize,sizeof(float))) == NULL)
+     {
+       printf("fmate: calloc - Dis_index\n");
+       exit(1);
+     }
+     if((Dis_ratia1 = (float *)calloc(rsize,sizeof(float))) == NULL)
+     {
+       printf("fmate: calloc - Dis_index\n");
+       exit(1);
+     }
+     if((Dis_ratia2 = (float *)calloc(rsize,sizeof(float))) == NULL)
+     {
+       printf("fmate: calloc - Dis_index\n");
+       exit(1);
+     }
+
+     if((link_locus = (int *)calloc(n_blocks,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - link_locus\n");
+       exit(1);
+     }
+     if((head_locus = (int *)calloc(n_blocks,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - head_locus\n");
+       exit(1);
+     }
+     if((link_locu2 = (int *)calloc(n_blocks,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - link_locu2\n");
+       exit(1);
+     }
+     if((link_locu3 = (int *)calloc(n_blocks,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - link_locu3\n");
+       exit(1);
+     }
+
+     printf("contigs: %d %d %d\n",rsize,max_ctg,nSeq);
+     size_row = n_depth;
+     p_matrix=imatrix(0,rsize,0,rsize);
+     s_matrix=imatrix(0,rsize,0,rsize);
+     s2_matrix=imatrix(0,rsize,0,rsize);
+     o_matrix=imatrix(0,rsize,0,rsize);
+     r_matrix=imatrix(0,rsize,0,rsize);
+     rc0_matrix=imatrix(0,rsize,0,rsize);
+     rc1_matrix=imatrix(0,rsize,0,rsize);
+     rc2_matrix=imatrix(0,rsize,0,rsize);
+     rc3_matrix=imatrix(0,rsize,0,rsize);
+     rc_matrix=imatrix(0,rsize,0,rsize);
+     num_hits =0;
+     k = 0;
+     offset = 0;
+     for(i=0;i<nSeq;i++)
+     {
+        stopflag=0;
+        j=i+1;
+        while((j<nSeq)&&(stopflag==0))
+        {
+          if(strcmp(R_Name[i],R_Name[j])==0)
+          {
+            j++;
+          }
+          else
+            stopflag=1;
+        }
+        if((j-i)>=2) 
+        {
+          int idi,idt,len1,len2,loci1,loci2;
+
+          if(hit_index[i] < hit_index[i+1])
+          {
+            idi = hit_index[i];
+            idt = hit_index[i+1];
+            len1 = superlength[i]/2;
+            len2 = superlength[i+1]/2;
+            loci1 = hit_locus1[i];
+            loci2 = hit_locus1[i+1];
+          }
+          else
+          {
+            idi = hit_index[i+1];
+            idt = hit_index[i];
+            len2 = superlength[i]/2;
+            len1 = superlength[i+1]/2;
+            loci2 = hit_locus1[i];
+            loci1 = hit_locus1[i+1];
+          }
+
+          if(loci1 < len1)
+          {
+            if(loci2 < len2)
+            {
+              rc0_matrix[idi][idt]++;
+            }
+            else
+            {
+              rc2_matrix[idi][idt]++;
+            }
+          }
+          else
+          {
+            if(loci2 < len2)
+            {
+              rc1_matrix[idi][idt]++;
+            }
+            else
+            {
+              rc3_matrix[idi][idt]++;
+            }
+          } 
+        }
+        else
+        {
+          printf("www: %s %d\n",R_Name[i],superlength[i]);
+        }
+        i=j-1;
+     }
+
+     for(i=0;i<max_ctg;i++)
+     {
+        for(j=0;j<max_ctg;j++)
+        {
+           if(j>i)
+           {
+             rc0_matrix[j][i] = rc0_matrix[i][j];
+             rc1_matrix[j][i] = rc2_matrix[i][j];
+             rc2_matrix[j][i] = rc1_matrix[i][j];
+             rc3_matrix[j][i] = rc3_matrix[i][j];
+           }
+        }
+     }
+     for(i=0;i<max_ctg;i++)
+     {
+        for(j=0;j<max_ctg;j++)
+        {
+          r_matrix[i][j] = rc0_matrix[i][j]+rc1_matrix[i][j]+rc2_matrix[i][j]+rc3_matrix[i][j];
+        }
+     }
+
+     printf("contigs2: %d %d %d\n",rsize,max_ctg,nSeq);
+     num_cells = 0;
+     for(i=0;i<max_ctg;i++)
+     {
+        for(j=0;j<max_ctg;j++)
+        {
+           int idh = i*max_ctg;
+           hit_rddex[j] = j;
+           num_cells = num_cells+r_matrix[i][j];
+           link_locu3[idh+j] = r_matrix[i][j];
+        }
+     }
+     for(i=0;i<max_ctg;i++)
+     {
+        ctg_part1[i] = -1;
+        ctg_part2[i] = -1;
+        ctg_mapp1[i] = -1;
+        ctg_mapp2[i] = -1;
+        ctg_rcdex1[i] = -1;
+     }
+
+     head_locus[0] = 0;
+     for(ii=1;ii<n_blocks;ii++)
+     {
+        head_locus[ii] = head_locus[ii-1] + link_locu3[ii-1];
+     }
+
+     if((hit_matlocu1 = (int *)calloc(num_cells,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - hit_matlocus\n");
+       exit(1);
+     }
+     if((hit_matlocu2 = (int *)calloc(num_cells,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - hit_matlocus\n");
+       exit(1);
+     }
+     if((hit_matindex = (int *)calloc(num_cells,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - hit_matindex\n");
+       exit(1);
+     }
+     if((hit_linkdex1 = (int *)calloc(num_cells,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - hit_linkdex1\n");
+       exit(1);
+     }
+     if((hit_linkdex2 = (int *)calloc(num_cells,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - hit_linkdex2\n");
+       exit(1);
+     }
+
+     for(i=0;i<nSeq;i++)
+     {
+        stopflag=0;
+        j=i+1;
+        while((j<nSeq)&&(stopflag==0))
+        {
+          if(strcmp(R_Name[i],R_Name[j])==0)
+          {
+            j++;
+          }
+          else
+            stopflag=1;
+        }
+        if((j-i)>=2) 
+        {
+          int idi,idt,ikk,len1,len2,loci1,loci2;
+          long idh1,idh2;
+
+          if(hit_index[i] < hit_index[i+1])
+          {
+            idi = hit_index[i];
+            idt = hit_index[i+1];
+            len1 = superlength[i]/2;
+            len2 = superlength[i+1]/2;
+            loci1 = hit_locus1[i];
+            loci2 = hit_locus1[i+1];
+          }
+          else
+          {
+            idi = hit_index[i+1];
+            idt = hit_index[i];
+            len2 = superlength[i]/2;
+            len1 = superlength[i+1]/2;
+            loci2 = hit_locus1[i];
+            loci1 = hit_locus1[i+1];
+          }
+
+          idh1 = idi*max_ctg+idt;
+          idh2 = idt*max_ctg+idi;
+
+          hit_matlocu1[head_locus[idh1]+link_locus[idh1]] = loci1;
+          hit_matlocu2[head_locus[idh2]+link_locu2[idh2]] = loci2;
+          strcpy(S_Name[head_locus[idh1]+link_locus[idh1]],R_Name[i]);
+          hit_linkdex1[head_locus[idh1]+link_locus[idh1]] = i;
+          hit_linkdex2[head_locus[idh2]+link_locu2[idh2]] = i;
+          link_locus[idh1]++;
+          link_locu2[idh2]++;
+        }
+        else
+        {
+          printf("www: %s %d\n",R_Name[i],superlength[i]);
+        }
+        i=j-1;
+     }
+
+     n_Bases = 0;
+     for(i=0;i<max_ctg;i++)
+        n_Bases = n_Bases + ctg_length[i];
+     for(i=0;i<max_ctg;i++)
+     {
+        for(j=0;j<max_ctg;j++)
+           hit_rddex[j] = j;
+        Dis_index[i] = 0.0;
+        ArraySort2_Int2(max_ctg,r_matrix[i],hit_rddex);
+ 
+        memset(ctg_rcindex,0,4*max_ctg); 
+
+        printf("scaffold: %d %d %d\n",i,max_ctg,ctg_length[i]);
+
+        printf("matrix: %d %d\n",i,ctg_length[i]);
+        for(j=0;j<size_row;j++)
+        {
+           int idi,idj,offset1,offset2;
+           int idd = hit_rddex[j];
+           int n_pairs = r_matrix[i][j];
+           int n_pairs_half = n_pairs/2;
+           float rr1,rr2,rat1,rat2,sq1,sq2;
+           int halflen_1,halflen_2,half_len1,half_len2;
+           int rcindex1,rcindex2,rcindex;
+   
+           rcindex1 = 1;
+           rcindex2 = 1;
+
+           idi = i;
+           idj = hit_rddex[j]; 
+           
+           offset1 = head_locus[idi*max_ctg+idj];
+           ray = hit_matlocu1;
+           dex1 = hit_linkdex1; 
+           ArraySort_Int2(n_pairs,ray+offset1,dex1+offset1);
+
+           offset2 = head_locus[idj*max_ctg+idi];
+           ray = hit_matlocu2;
+           dex2 = hit_linkdex2; 
+           ArraySort_Int2(n_pairs,ray+offset2,dex2+offset2);
+
+
+           if((i == 82)&&(idd == 86))
+           {
+             PCRdup_Process(argv,args,n_pairs,offset1,offset2);
+           }
+           halflen_1 = hit_matlocu1[offset1+n_pairs_half];
+           halflen_2 = hit_matlocu1[offset2+n_pairs_half];
+           half_len1 = ctg_length[idi]/2;
+           half_len2 = ctg_length[idj]/2;
+
+           if(halflen_1 > ctg_length[idi]/2)
+           {
+             rcindex1 = 0;
+             halflen_1 = ctg_length[idi]-halflen_1;
+           }
+           if(halflen_2 > ctg_length[idj]/2)
+           {
+             rcindex2 = 0;
+             halflen_2 = ctg_length[idj]-halflen_2;
+           }
+         
+           if(rcindex1 == 0)
+           {
+             if(rcindex2 == 0)
+               rcindex = 0;
+             else
+               rcindex = 1;
+           }
+           else
+           {
+             if(rcindex2 == 0)
+               rcindex = 2;
+             else
+               rcindex = 3;
+           }
+
+           ctg_rcindex[j] = rcindex; 
+
+           rat1 = half_len1;
+           rat1 = rat1/halflen_1;
+           rat2 = half_len2;
+           rat2 = rat2/halflen_2;
+
+           if(rat1 > 10.0)
+             rat1 = 1.0;
+           if(rat2 > 10.0)
+             rat2 = 1.00;
+           rr1 = n_Bases;
+           rr1 = rr1/nSeq;
+           rr1 = rr1*n_pairs*1000.0; 
+           rr1 = rr1/half_len1;
+           rr1 = rr1*(rat1 - 1.0);
+//           rr1 = rr1/half_len1;
+
+           rr2 = n_Bases;
+           rr2 = rr2/nSeq;
+           rr2 = rr2*n_pairs*1000.0; 
+           rr2 = rr2/half_len2;
+           rr2 = rr2*(rat2 - 1.0);
+//           rr2 = rr2/half_len2;
+
+           if(i==1)
+           {
+//                printf("mmm: %d %ld %d %d %d %d %d %f %f %f %f\n",n_pairs,n_Bases,nSeq,halflen_2,ctg_length[idj]/2,idi,idj,rr1,rr2,sq1,sq2);
+           }
+
+           Dis_ratia1[j] = rat1;
+           Dis_ratia2[j] = rat2;
+
+           Dis_index[j] = rr1*rr2; 
+//           printf("%6d | %6d %d %d | %d %d %f %f | %f %f %f %4d %4d %4d %4d\n",ctg_length[idd],r_matrix[i][j],hit_rddex[j],rcindex,halflen_1,halflen_2,rat1,rat2,rr1,rr2,rr1*rr2,rc0_matrix[i][idd],rc1_matrix[i][idd],rc2_matrix[i][idd],rc3_matrix[i][idd]);
+        }
+
+     }
+
+     if((namef = fopen(argv[args],"r")) == NULL)
+     {
+       printf("ERROR main:: alignment file 2 \n");
+       exit(1);
+     }
+     if((namef2 = fopen(argv[args+1],"w")) == NULL)
+     {
+       printf("ERROR main:: alignment file 2 \n");
+       exit(1);
+     }
+     i=0;
+     while(!feof(namef))
+     {
+       if(fgets(line,2000,namef) == NULL)
+       {
+//        printf("fgets command error:\n);
+       }
+       if(feof(namef)) break;
+       if(hit_masks[i] == 0)
+         fprintf(namef2,"%s",line);
+       i++;
+     }
+     fclose(namef);
+     fclose(namef2);
+     printf("Masked reads %d\n",i);
+}
 
 /*   subroutine to sort out read pairs    */
 /* =============================== */
@@ -394,7 +827,7 @@ void PCRdup_Process(char **argv,int args,int nSeq,int offset1,int offset2)
         {
           rate = (j-k)*100;
           rate = rate/nSeq;
-//          printf("frequency1:%d %d %f\n",j-k,BAR,rate);
+          printf("frequency1:%d %d %f\n",j-k,BAR,rate);
           BAR = BAR+nstep;
           heap_list1[num_heap1] = j-k;
           heap_steps[num_heap1] = k; 
@@ -411,6 +844,16 @@ void PCRdup_Process(char **argv,int args,int nSeq,int offset1,int offset2)
         }
         k = j-1;
      }
+
+     num_hits = 0;
+     for(i=0;i<num_heap1;i++)
+         num_hits = num_hits + heap_list1[i];
+    
+     num_ave = num_hits;
+     if(num_heap1 > 0)
+       num_ave = num_hits/num_heap1;
+     else
+       num_ave = num_hits;
 
      for(i=0;i<num_heap1;i++)
      {
@@ -493,7 +936,7 @@ void PCRdup_Process(char **argv,int args,int nSeq,int offset1,int offset2)
         {
           rate = (j-k)*100;
           rate = rate/nSeq;
-//          printf("frequency2:%d %d %f\n",j-k,BAR,rate);
+          printf("frequency2:%d %d %f\n",j-k,BAR,rate);
           BAR = BAR+nstep;
           heap_list1[num_heap1] = j-k;
           heap_steps[num_heap1] = k; 

@@ -25,7 +25,6 @@
 /****************************************************************************/
 
 
-
 #include <math.h>
 #include <values.h>
 #include <stdio.h>
@@ -34,46 +33,57 @@
 #include <dirent.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/types.h> 
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <sys/signal.h>
+#include <errno.h>
+#include "fasta.h"
 
-#define GT '>'
-#define GT4 (((((GT<<8)+GT)<<8)+GT)<<8)+GT
-
+#define MAXLINE 4096
 #define ENDS_EXTRA 0
 #define PADCHAR '-'
-#define MAX_N_BRG 50000 
-#define MAX_N_ROW 50000 
-#define Max_N_NameBase 60 
+#define Max_N_NameBase 50
 #define Max_N_Pair 100
 static char **S_Name;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+static int *ctg_offst1,*ctg_offed1,*ctg_list1,*ctg_head1,*ctg_id2id1,*ctg_sfdex1,*ctg_mscore1;
+static int *ctg_offst2,*ctg_offed2,*ctg_list2,*ctg_head2,*ctg_id2id2,*ctg_sfdex2,*ctg_mscore2;
+static int *ctg_sfdex1,*ctg_sfdex2,*ctg_hicln1,*ctg_hicln2,*ctg_rank1,*ctg_rank2,*ctg_index1,*ctg_index2;
+static int IMOD = 10;
+static int Max_Gap = 200;
+static int longread_flag =1;
+static B64_long *cigar_head,sBase;
 
 /* SSAS default parameters   */
-static int IMOD=0;
-static int n_type=0;
-static int barreads=10;
-static int file_flag=2;
-static int tiles_flag=0;
-static int block_set=2500;
-static int edge_flag=0;
-static int mpscore=20;
-static int nContig=0;
-static int n_lenn = 14;
-static int max_len = 100000;
+
+typedef struct
+{
+       int foffset;
+       int fsindex;
+} SIO;
+
+fasta *sub;
+
 
 int main(int argc, char **argv)
 {
-    FILE *namef;
-    int i,j,nSeq,args;
-    int n_contig,n_reads,n_readsMaxctg,nseq;
-    void Mapping_Process(char **argv,int args,int nSeq);
-    void Memory_Allocate(int arr);
-    char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
-    char **cmatrix(long nrl,long nrh,long ncl,long nch);
+    FILE *fp,*namef,*fpOutfast,*fpOutfast2;
+    int i,j,k,nSeq,args,i_contig,idt,stopflag,num_hit1,num_hit2,n_scaff,rcdex;
+    char *st,*ed,RC[2]={0};
+    char line[2000]={0},ctgnameout[Max_N_NameBase],tmptext[Max_N_NameBase],temp2[Max_N_NameBase];
+    char tmptext2[Max_N_NameBase],tmptext3[Max_N_NameBase];
+    char **cmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch);
+    fasta *seq,*seq2; 
+    void ArraySort_Mix(int n, B64_long *arr, int *brr);
+    void Read_Pairs(char **argv,int args,int nLib,int nSeq);
+    void Align_Process(char **argv,int args,int nRead);
+    void Cigar_Filter(char **argv,int args,int nRead);
+    int n_contig,n_contig1,n_contig2,offset,start,nRead;
 
     if(argc < 2)
     {
-      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
-
+      printf("Usage: %s <AGP_stage1> <AGP_stage2> <Tag_file> <Mgered_AGP>\n",argv[0]);
       exit(1);
     }
 
@@ -86,64 +96,285 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&IMOD); 
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-type"))
+       else if(!strcmp(argv[i],"-longread"))
        {
-         sscanf(argv[++i],"%d",&n_type); 
+         sscanf(argv[++i],"%d",&longread_flag);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-block"))
+       else if(!strcmp(argv[i],"-gap"))
        {
-         sscanf(argv[++i],"%d",&block_set);
-         edge_flag=1;
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-tile"))
-       {
-         sscanf(argv[++i],"%d",&tiles_flag);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-reads"))
-       {
-         sscanf(argv[++i],"%d",&barreads);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-score"))
-       {
-         sscanf(argv[++i],"%d",&mpscore);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-max"))
-       {
-         sscanf(argv[++i],"%d",&max_len);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-file"))
-       {
-         sscanf(argv[++i],"%d",&file_flag);
+         sscanf(argv[++i],"%d",&Max_Gap);
          args=args+2;
        }
     }
 
-    nseq=0;
     if((namef = fopen(argv[args],"r")) == NULL)
     {
-      printf("ERROR main:: args \n");
+      printf("ERROR main:: reads group file \n");
       exit(1);
     }
+    i_contig = 0;
     while(!feof(namef))
     {
       if(fgets(line,2000,namef) == NULL)
       {
-//       printf("fgets command error:\n);
+//        printf("fgets command error:\n);
       }
       if(feof(namef)) break;
-      nseq++;
+      i_contig++;
     }
-    fclose(namef); 
-   
-/*
-    nRead=0;
+    fclose(namef);
+
+    n_contig1 = i_contig;
+    if((ctg_list1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_list\n");
+      exit(1);
+    }
+    if((ctg_head1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_head\n");
+      exit(1);
+    }
+    if((ctg_offst1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_index1\n");
+      exit(1);
+    }
+    if((ctg_offed1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_id2id1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_hicln1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_mscore1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_sfdex1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+    if((ctg_rank1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+    if((ctg_index1= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+
+    if((namef = fopen(argv[args],"r")) == NULL)
+    {
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }
+    i = 0;
+
+    while(fscanf(namef,"%s %d %d %d %s %s %d %d %s",tmptext,&ctg_offst1[i],&ctg_offed1[i],&ctg_rank1[i],tmptext2,tmptext3,&ctg_hicln1[i],&ctg_mscore1[i],tmptext2)!=EOF)
+    {
+      st = strrchr(tmptext,'_');
+      ctg_sfdex1[i] = atoi(st+1);
+      ctg_id2id1[i] = ctg_offst1[i];
+      st = strrchr(tmptext3,'_');
+      ctg_index1[i] = atoi(st+1);
+      i++;
+    }
+    fclose(namef);
+
+    n_contig1 = i;
+
     if((namef = fopen(argv[args+1],"r")) == NULL)
+    {
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }
+    i_contig = 0;
+    while(!feof(namef))
+    {
+      if(fgets(line,2000,namef) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
+      if(feof(namef)) break;
+      i_contig++;
+    }
+    fclose(namef);
+
+    n_contig2 = i_contig;
+
+    if((ctg_list2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_list\n");
+      exit(1);
+    }
+    if((ctg_head2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_head\n");
+      exit(1);
+    }
+    if((ctg_hicln2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_mscore2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_offed2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offed1\n");
+      exit(1);
+    }
+    if((ctg_offst2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_offst1\n");
+      exit(1);
+    }
+    if((ctg_sfdex2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+    if((ctg_rank2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+    if((ctg_index2= (int *)calloc(i_contig,sizeof(int))) == NULL)
+    {
+      printf("ERROR Memory_Allocate: Align_Process - ctg_sfdex\n");
+      exit(1);
+    }
+
+    if((namef = fopen(argv[args+1],"r")) == NULL)
+    {
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }
+    i = 0;
+
+    printf("num: %d %s\n",i_contig,argv[args]);
+    while(fscanf(namef,"%s %d %d %d %s %s %d %d %s",tmptext,&ctg_offst2[i],&ctg_offed2[i],&ctg_rank2[i],tmptext2,tmptext3,&ctg_hicln2[i],&ctg_mscore2[i],tmptext2)!=EOF)
+    {
+      st = strrchr(tmptext,'_');
+      ctg_sfdex2[i] = atoi(st+1);
+      st = strrchr(tmptext3,'_');
+      ctg_index2[i] = atoi(st+1);
+      i++;
+    }
+    fclose(namef);
+
+    num_hit1 = 0;
+    printf("num: %d %d\n",num_hit1,n_contig1);
+    for(i=0;i<n_contig1;i++)
+    {
+       stopflag=0;
+       j=i+1;
+       while((j<n_contig1)&&(stopflag==0))
+       {
+         if(ctg_sfdex1[j]==ctg_sfdex1[i])
+         {
+           j++;
+         }
+         else
+           stopflag=1;
+       }
+
+       ctg_list1[num_hit1] = j-i;
+       num_hit1++;
+       i=j-1;
+    }
+
+    ctg_head2[0] = 0;
+    for(i=1;i<=num_hit1;i++)
+    {
+       ctg_head1[i] = ctg_head1[i-1] + ctg_list1[i-1];
+    }
+
+/*
+    for(j=0;j<num_hit;j++)
+    {
+       for(i=0;i<ctg_list[j];i++)
+       {
+          int idd = ctg_head[j]+i;
+          int idk = ctg_offst1[idd];
+          printf("hist: %d %d %d %d %d\n",i,j,ctg_list[j],idd,idk); 
+       }
+    }   */
+
+    num_hit2 = 0;
+    for(i=0;i<n_contig2;i++)
+    {
+       stopflag=0;
+       j=i+1;
+       while((j<n_contig2)&&(stopflag==0))
+       {
+         if(ctg_sfdex2[j]==ctg_sfdex2[i])
+         {
+           j++;
+         }
+         else
+           stopflag=1;
+       }
+
+       ctg_list2[num_hit2] = j-i;
+       num_hit2++;
+       i=j-1;
+    }
+
+    printf("num: %d %d\n",num_hit2,n_contig2);
+    ctg_head2[0] = 0;
+    for(i=1;i<=num_hit2;i++)
+    {
+       ctg_head2[i] = ctg_head2[i-1] + ctg_list2[i-1];
+    }
+
+    for(i=0;i<num_hit1;i++)
+    {
+       if(ctg_list1[i] >= 2)
+       {
+         for(j=0;j<ctg_list1[i];j++)
+         {
+            int idd = ctg_head1[i]+j;
+            printf("hist1: %d %d %d %d %d\n",i,ctg_list1[i],ctg_sfdex1[idd],ctg_offst1[idd],ctg_index1[idd]);
+         }
+       }
+    }
+   
+    for(i=0;i<num_hit2;i++)
+    {
+       if(ctg_list2[i] >= 2)
+       {
+         for(j=0;j<ctg_list2[i];j++)
+         {
+            int idd = ctg_head2[i]+j;
+            printf("hist2: %d %d %d %d %d\n",i,ctg_list2[i],ctg_sfdex2[idd],ctg_offst2[idd],ctg_index2[idd]);
+         }
+       }
+    }
+   
+    for(i=0;i<num_hit2;i++)
+       printf("hist2: %d %d %d\n",i,ctg_list2[i],ctg_sfdex2[ctg_head2[i-1]]);
+   
+    
+    nRead=0;
+    if((namef = fopen(argv[args+2],"r")) == NULL)
     {
       printf("ERROR main:: args+1 \n");
       exit(1);
@@ -154,26 +385,11 @@ int main(int argc, char **argv)
       if(feof(namef)) break;
       nRead++;
     }
-    fclose(namef);   */ 
+    fclose(namef);
 
-    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-    if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
+    S_Name=cmatrix(0,nRead+10,0,Max_N_NameBase);
 
-    nSeq=nseq;
-    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    n_readsMaxctg=0;
-    n_contig=0;
-    n_reads=0;
-
-    if((namef = fopen(argv[args],"r")) == NULL)
+    if((namef = fopen(argv[args+2],"r")) == NULL)
     {
       printf("ERROR main:: reads group file \n");
       exit(1);
@@ -181,119 +397,41 @@ int main(int argc, char **argv)
 
 /*  read the alignment files         */
     i=0;
-    while(fscanf(namef,"%s %s %s %s %s %s",tmpname,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
+    while(fscanf(namef,"%s %s %s %s",temp2,temp2,temp2,S_Name[i])!=EOF)
     {
-        int idt;
-        st = readname;
-        ed= strrchr(readname,'_');
-        memset(tmpname,'\0',60);
-        strcpy(tmpname,ed);
-        strcat(lociname,tmpname);
-        strcat(lociname,"-");
-        idt = atoi(ed+1);
-        j = i/2;
-        if((i%2) == 0)
-        {
-          strcpy(S_Name[j],lociname);  
-        }
-        else
-        {
-          strcat(S_Name[j],lociname);
-          readIndex[j] = j;
-//    printf("%d %s %s %s\n",j,S_Name[j],lociname,readname);
-        }
         i++;
     }
     fclose(namef);
 
 
-    n_reads=i/2;
-//    Readname_match(seq,argv,args,n_reads,nRead);
-    Mapping_Process(argv,args,n_reads);
-//    Read_Pairs(argv,args,seq,n_reads);
+/*  input read alignment info line   */
+    if((fpOutfast = fopen(argv[args+3],"w")) == NULL)
+    {
+      printf("ERROR main:: reads group file: %s \n",argv[args]);
+      exit(1);
+    }
 
+    n_scaff = 0;
+    n_contig = 0;
+    for(i=0;i<num_hit2;i++)
+    {
+       start = 0;
+       offset = 0;
+       i_contig = 1;
+       for(j=0;j<ctg_list2[i];j++)
+       {
+          int idd = ctg_head2[i]+j;
+          int idk = ctg_offst2[idd];
+//             printf("ddd_%d %d %d %d %d\n",n_scaff,idd,idk,ctg_list2[i],ctg_list[idk]);
+       }
+       n_scaff++;
+    }
+
+    fclose(fpOutfast);
     return EXIT_SUCCESS;
 
 }
 /* end of the main */
-
-/*   subroutine to sort out read pairs    */
-/* =============================== */
-void Mapping_Process(char **argv,int args,int nSeq)
-/* =============================== */
-{
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
-     FILE *namef,*namef2;
-     char line[2000];
-     void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
-     ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
-     num_hits =0;
-     k = 0;
-     n_uniqs = 0;
-     for(i=0;i<(nSeq-1);i++)
-     {
-        stopflag=0;
-        j=i+1;
-        while((j<nSeq)&&(stopflag==0))
-        {
-          if(strcmp(S_Name[i],S_Name[j])==0)
-          {
-            j++;
-          }
-          else
-            stopflag=1;
-        }
-        k = readIndex[i];
-        num_hits = j-i;
-        if(num_hits>=2) 
-        {
-          n_uniqs++;
-	  for(n=(i+1);n<j;n++)
-	  {
-             int idd = 2*readIndex[n];
-             hit_masks[idd] = 1;
-             hit_masks[idd+1] = 1;
-          }
-        }
-        else
-        {
-          n_uniqs++;
-        }
-        i=j-1;
-     }
-
-     if((namef = fopen(argv[args],"r")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-     if((namef2 = fopen(argv[args+1],"w")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-
-     i=0;
-     while(!feof(namef))
-     {
-       if(fgets(line,2000,namef) == NULL)
-       {
-//        printf("fgets command error:\n);
-       }
-       if(feof(namef)) break;
-       if(hit_masks[i] == 0)
-         fprintf(namef2,"%s",line);
-       i++;
-     }
-     fclose(namef);
-     fclose(namef2);
-     printf("Masked reads %d %d %d\n",i,nSeq,n_uniqs);
-}
-
 
 #define SWAP(a,b) temp=(a);(a)=b;(b)=temp;
 
@@ -303,11 +441,11 @@ void Mapping_Process(char **argv,int args,int nSeq)
      vol. 21, pp. 847-857) also see Numerical Recipes in C                  */  
 
 /* =============================== */
-void ArraySort_Long(int n, long *arr)
+void ArraySort_Long(int n, B64_long *arr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -471,11 +609,11 @@ void ArraySort_Int(int n, int *arr)
 
 
 /* =============================== */
-void ArraySort_Mix(int n, long *arr, int *brr)
+void ArraySort_Mix(int n, B64_long *arr, int *brr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -754,11 +892,11 @@ void ArraySort2_Int2(int n, int *arr, int *brr)
 }
 
 /* =============================== */
-void ArraySort_Mix3(int n, long *arr, int *brr, int *crr)
+void ArraySort_Mix3(int n, B64_long *arr, int *brr, int *crr)
 /* =============================== */
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,c,NSTACK=50,istack[NSTACK];
-     long a,temp,MIN=7;
+     B64_long a,temp,MIN=7;
 
      for(;;)
      {
@@ -970,9 +1108,40 @@ void ArraySort_String(int n, char **Pair_Name, int *brr)
 
 
 /* creat an int matrix with subscript ange m[nrl...nrh][ncl...nch]  */
-int     **imatrix(long nrl,long nrh,long ncl,long nch)
+int     **mmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
 {
-        long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        int  **m;
+
+        
+        /* allocate pointers to rows        */
+        if((m=(int **)calloc(nrow,sizeof(int*)))==NULL)
+        {
+           printf("error imatrix: calloc error No. 1 \n");
+           return(NULL);
+        }
+        m+=0;
+        m-=nrl;
+
+        /* allocate rows and set pointers to them        */
+        if((m[nrl]=(int *)calloc(nrow*ncol,sizeof(int)))==NULL)
+        {
+           printf("error imatrix: calloc error No. 2 \n");
+           return(NULL);
+        }
+        m[nrl]+=0;
+        m[nrl]-=nrl;
+
+        for(i=nrl+1;i<=nrh;i++)
+           m[i]=m[i-1]+ncol;
+        /* return pointer to array of pointers to rows   */
+        return m;
+}
+
+/* creat an int matrix with subscript ange m[nrl...nrh][ncl...nch]  */
+int     **imatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
+{
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
         int  **m;
 
         /* allocate pointers to rows        */
@@ -1000,9 +1169,9 @@ int     **imatrix(long nrl,long nrh,long ncl,long nch)
 }
 
 /* creat char matrix with subscript ange cm[nrl...nrh][ncl...nch]  */
-char    **cmatrix(long nrl,long nrh,long ncl,long nch)
+char    **cmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch)
 {
-        long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        B64_long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
         char **cm;
 
         /* allocate pointers to rows        */

@@ -53,7 +53,7 @@ static int *ctg_index2,*ctg_rcdex2,*ctg_list2,*ctg_head2;
 static int *ctg_sfdex2,*ctg_length2,*ctg_mscore2,*ctg_ordex2,*ctg_gaplen2;
 static int IMOD = 10;
 static int Max_Gap = 200;
-static int run_flag =1;
+static int run_flag =0;
 static B64_long *cigar_head,sBase;
 
 /* SSAS default parameters   */
@@ -387,20 +387,20 @@ int main(int argc, char **argv)
                idt = idd1;
                rcdex = 0;
              }
-             offset = offset+ctg_length[idd1];
              rcdex = ctg_rcdex[idd1]^ctg_rcdex2[idd];
              if((k == (ctg_list[idk] - 1))&&(ctg_list[idk] > 1)&&(ctg_list2[i] > 1))
              {
-             printf("scaffHiC_%d %d %d %d %d %d %d || %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],ctg_ordex[idd1],Max_Gap,rcdex,ctg_mscore[idd1],ctg_list2[i],ctg_mscore2[idd],ctg_list[idk]);
-               fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],ctg_ordex[idd1],Max_Gap,rcdex,ctg_mscore2[idd]);
+             printf("scaffHiC_%d %d %d %d %d %d %d || %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],offset,Max_Gap,rcdex,ctg_mscore[idd1],ctg_list2[i],ctg_mscore2[idd],ctg_list[idk]);
+               fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],offset,Max_Gap,rcdex,ctg_mscore2[idd]);
              }
              else
              {
                if(ctg_list[idk] == 1)
-                 fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],ctg_ordex[idd1],Max_Gap,rcdex,ctg_mscore2[idd]);
+                 fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],offset,Max_Gap,rcdex,ctg_mscore2[idd]);
                else
-                 fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],ctg_ordex[idd1],Max_Gap,rcdex,ctg_mscore[idd1]);
+                 fprintf(fpOutfast,"scaffHiC_%d %d %d %d %d %d %d\n",n_scaff,ctg_index[idd1],ctg_length[idd1],offset,Max_Gap,rcdex,ctg_mscore[idd1]);
              }
+             offset = offset+ctg_length[idd1]+Max_Gap;
              i_contig++;
              n_contig++;
           }

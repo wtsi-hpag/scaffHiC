@@ -25,7 +25,6 @@
 /****************************************************************************/
 
 
-
 #include <math.h>
 #include <values.h>
 #include <stdio.h>
@@ -35,44 +34,39 @@
 #include <string.h>
 #include <ctype.h>
 
-#define GT '>'
-#define GT4 (((((GT<<8)+GT)<<8)+GT)<<8)+GT
-
-#define ENDS_EXTRA 0
 #define PADCHAR '-'
-#define MAX_N_BRG 50000 
-#define MAX_N_ROW 50000 
-#define Max_N_NameBase 60 
-#define Max_N_Pair 100
-static char **S_Name;
-static int *hit_locus,*hit_masks,*hit_mscore,*hit_length,*readIndex;
+#define Max_N_NameBase 60
+static char **S_Name,**R_Name;
+static int *hit_rddex,*hit_score,*hit_rcdex,*hit_locus1,*superlength,*hit_matlocu1,*hit_matlocu2,*hit_matindex;
+static int *ctg_length,*hit_index;
 
 /* SSAS default parameters   */
 static int IMOD=0;
-static int n_type=0;
-static int barreads=10;
-static int file_flag=2;
-static int tiles_flag=0;
-static int block_set=2500;
-static int edge_flag=0;
-static int mpscore=20;
 static int nContig=0;
-static int n_lenn = 14;
-static int max_len = 100000;
+static int file_flag = 1;
+static int min_len = 100000;
+static int max_ctg = 1000000;
+static int i_ctg1 = 1;
+static int i_ctg2 = 2;
+static int n_mapq = 1;
+static float m_score = 400.0;
+static int i_getindex = 2;
 
 int main(int argc, char **argv)
 {
-    FILE *namef;
-    int i,j,nSeq,args;
-    int n_contig,n_reads,n_readsMaxctg,nseq;
-    void Mapping_Process(char **argv,int args,int nSeq);
-    void Memory_Allocate(int arr);
-    char line[2000]={0},tempc1[60],lociname[60],tempc[60],readname[60],tmpname[60],*st,*ed;
+    FILE *namef,*namef2;
+    int i,nSeq,args,idt;
+    int n_contig,n_reads,nseq;
+    void Matrix_Process(char **argv,int args,int nSeq);
+    char *st,*ed;
+    char line[2000]={0},tempc1[60],tempc2[60],tempc3[60],tempc4[60],tempc5[60],rdname[60];
+    char rdname1[60],rdname2[60],rdname3[60],rdname4[60],rdname5[60];
     char **cmatrix(long nrl,long nrh,long ncl,long nch);
+    long r_index;
 
     if(argc < 2)
     {
-      printf("Usage: %s <input_readplace_file> <output_readplace_file>\n",argv[0]);
+      printf("Usage: %s <Input_align_file> <Output_align_file> n",argv[0]);
 
       exit(1);
     }
@@ -86,35 +80,29 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&IMOD); 
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-type"))
+       else if(!strcmp(argv[i],"-mapq"))
        {
-         sscanf(argv[++i],"%d",&n_type); 
+         sscanf(argv[++i],"%d",&n_mapq);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-block"))
+       else if(!strcmp(argv[i],"-len"))
        {
-         sscanf(argv[++i],"%d",&block_set);
-         edge_flag=1;
+         sscanf(argv[++i],"%d",&min_len);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-tile"))
+       else if(!strcmp(argv[i],"-ctg1"))
        {
-         sscanf(argv[++i],"%d",&tiles_flag);
+         sscanf(argv[++i],"%d",&i_ctg1);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-reads"))
+       else if(!strcmp(argv[i],"-ctg2"))
        {
-         sscanf(argv[++i],"%d",&barreads);
+         sscanf(argv[++i],"%d",&i_ctg2);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-score"))
+       else if(!strcmp(argv[i],"-index"))
        {
-         sscanf(argv[++i],"%d",&mpscore);
-         args=args+2;
-       }
-       else if(!strcmp(argv[i],"-max"))
-       {
-         sscanf(argv[++i],"%d",&max_len);
+         sscanf(argv[++i],"%d",&i_getindex);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-file"))
@@ -124,95 +112,55 @@ int main(int argc, char **argv)
        }
     }
 
+
+    fflush(stdout);
+    if(system("ps aux | grep scaffHiC_pmatrix; date") == -1)
+    {
+//        printf("System command error:\n);
+    }
+
     nseq=0;
-    if((namef = fopen(argv[args],"r")) == NULL)
-    {
-      printf("ERROR main:: args \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      if(fgets(line,2000,namef) == NULL)
-      {
-//       printf("fgets command error:\n);
-      }
-      if(feof(namef)) break;
-      nseq++;
-    }
-    fclose(namef); 
-   
-/*
-    nRead=0;
-    if((namef = fopen(argv[args+1],"r")) == NULL)
-    {
-      printf("ERROR main:: args+1 \n");
-      exit(1);
-    }
-    while(!feof(namef))
-    {
-      fgets(line,2000,namef);
-      if(feof(namef)) break;
-      nRead++;
-    }
-    fclose(namef);   */ 
-
-    if((hit_masks = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-    if((readIndex = (int *)calloc(nseq,sizeof(int))) == NULL)
-    {
-      printf("fmate: calloc - hit_locus2\n");
-      exit(1);
-    }
-
-    nSeq=nseq;
-    S_Name=cmatrix(0,nseq+10,0,Max_N_NameBase);
-    n_readsMaxctg=0;
-    n_contig=0;
-    n_reads=0;
-
     if((namef = fopen(argv[args],"r")) == NULL)
     {
       printf("ERROR main:: reads group file \n");
       exit(1);
     }
 
+    if((namef2 = fopen(argv[args+1],"w")) == NULL)
+    {
+      printf("ERROR main:: args \n");
+      exit(1);
+    }
 /*  read the alignment files         */
     i=0;
-    while(fscanf(namef,"%s %s %s %s %s %s",tmpname,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
-//    while(fscanf(namef,"%s %s %s %s %s %s",tempc1,readname,lociname,tempc1,tempc1,tempc1)!=EOF)
+    r_index = 0;
+    while(fscanf(namef,"%s %s %s %s %s",tempc1,tempc2,tempc3,tempc4,tempc5)!=EOF)
     {
-        int idt;
-        st = readname;
-        ed= strrchr(readname,'_');
-        memset(tmpname,'\0',60);
-        strcpy(tmpname,ed);
-        strcat(lociname,tmpname);
-        strcat(lociname,"-");
-        idt = atoi(ed+1);
-        j = i/2;
-        if((i%2) == 0)
+        if(strcmp(rdname1,tempc1) == 0)
         {
-          strcpy(S_Name[j],lociname);  
+          if(strcmp(rdname3,tempc3) == 0)
+          {
+//          printf("www: %09ld %s %s %s %s\n",r_index,tempc1,rdname3,tempc3,tempc4);
+//            printf("%010ld %s %s %s %s\n",r_index,rdname2,rdname3,rdname4,rdname5);
+//            printf("%010ld %s %s %s %s\n",r_index,tempc2,tempc3,tempc4,tempc5);
+            ed= strrchr(tempc3,'_');
+            idt = atoi(ed+1);
+            fprintf(namef2,"%d %s %s\n",idt,rdname4,tempc4);
+//            fprintf(namef2,"%s %s %s %s %s %s\n",tempc1,tempc3,rdname4,tempc4,rdname5,tempc5);
+//            fprintf(namef2,"%s %s %s %s %s\n",tempc1,tempc2,tempc3,tempc4,tempc5);
+          }
+          r_index++;
         }
-        else
-        {
-          strcat(S_Name[j],lociname);
-          readIndex[j] = j;
-//    printf("%d %s %s %s\n",j,S_Name[j],lociname,readname);
-        }
+        strcpy(rdname1,tempc1);
+        strcpy(rdname2,tempc2);
+        strcpy(rdname3,tempc3);
+        strcpy(rdname4,tempc4);
+        strcpy(rdname5,tempc5);
         i++;
     }
     fclose(namef);
 
-
-    n_reads=i/2;
-//    Readname_match(seq,argv,args,n_reads,nRead);
-    Mapping_Process(argv,args,n_reads);
-//    Read_Pairs(argv,args,seq,n_reads);
-
+    printf("Reads: %d %ld\n",i,r_index);
     return EXIT_SUCCESS;
 
 }
@@ -220,78 +168,99 @@ int main(int argc, char **argv)
 
 /*   subroutine to sort out read pairs    */
 /* =============================== */
-void Mapping_Process(char **argv,int args,int nSeq)
+void Matrix_Process(char **argv,int args,int nSeq)
 /* =============================== */
 {
-     int i,j,k,m,n,n_uniqs;
-     int num_hits,stopflag;
+     int i,j,k,m,n,n_scaff,n_blocks;
      FILE *namef,*namef2;
-     char line[2000];
-     void ArraySort_String(int n,char **Pair_Name,int *brr);
-     
-     ArraySort_String(nSeq,S_Name,readIndex);
-     printf("Total reads: %d\n",nSeq);
+     int *ctg_list;
+     long num_cells,n_Bases;
+     int num_hits,num_hit1,num_hit2,rcdex,rsize,rsize2,size_row;
+     int stopflag,offset,*ray,*dex;
+     int *ctg_idex1,*ctg_idex2,*ctg_mask,*ctg_rcdex1;
+     int n_length = min_len;
+
+     rsize = max_ctg+10; 
+     n_blocks = rsize*rsize; 
+     if((ctg_idex1 = (int *)calloc(nSeq,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_idex1\n");
+       exit(1);
+     }
+     if((ctg_idex2 = (int *)calloc(nSeq,sizeof(int))) == NULL)
+     {
+       printf("fmate: calloc - ctg_idex2\n");
+       exit(1);
+     }
+
+     printf("contigs: %d %d %d\n",rsize,max_ctg,nSeq);
      num_hits =0;
      k = 0;
-     n_uniqs = 0;
-     for(i=0;i<(nSeq-1);i++)
+     offset = 0;
+     for(i=0;i<nSeq;i++)
      {
         stopflag=0;
         j=i+1;
         while((j<nSeq)&&(stopflag==0))
         {
-          if(strcmp(S_Name[i],S_Name[j])==0)
+          if(strcmp(R_Name[i],R_Name[j])==0)
           {
             j++;
           }
           else
             stopflag=1;
         }
-        k = readIndex[i];
-        num_hits = j-i;
-        if(num_hits>=2) 
+        if((j-i)>=2) 
         {
-          n_uniqs++;
-	  for(n=(i+1);n<j;n++)
-	  {
-             int idd = 2*readIndex[n];
-             hit_masks[idd] = 1;
-             hit_masks[idd+1] = 1;
+          int idi,idt,len1,len2,loci1,loci2;
+
+          if((hit_score[i] > n_mapq)&&(hit_score[i+1] > n_mapq))
+          {
+            if((hit_index[i] == i_ctg1)&&(hit_index[i+1] == i_ctg2))
+            {
+              ctg_idex1[i] = 1;
+              ctg_idex2[i+1] = 1;
+            }
+            else if((hit_index[i] == i_ctg2)&&(hit_index[i+1] == i_ctg1))
+            {
+              ctg_idex1[i+1] = 1;
+              ctg_idex2[i] = 1;
+            }
           }
         }
         else
         {
-          n_uniqs++;
+          printf("www: %s %d\n",R_Name[i],superlength[i]);
         }
         i=j-1;
      }
 
-     if((namef = fopen(argv[args],"r")) == NULL)
+     if((namef = fopen(argv[args+1],"w")) == NULL)
      {
-       printf("ERROR main:: reads group file \n");
-       exit(1);
-     }
-     if((namef2 = fopen(argv[args+1],"w")) == NULL)
-     {
-       printf("ERROR main:: reads group file \n");
+       printf("ERROR main:: alignment file 2 \n");
        exit(1);
      }
 
-     i=0;
-     while(!feof(namef))
+     if((namef2 = fopen(argv[args+2],"w")) == NULL)
      {
-       if(fgets(line,2000,namef) == NULL)
-       {
-//        printf("fgets command error:\n);
-       }
-       if(feof(namef)) break;
-       if(hit_masks[i] == 0)
-         fprintf(namef2,"%s",line);
-       i++;
+       printf("ERROR main:: alignment file 2 \n");
+       exit(1);
+     }
+
+     for(i=0;i<nSeq;i++)
+     {
+        if(ctg_idex1[i] == 1)
+          fprintf(namef,"%s %d %d\n",R_Name[i],hit_locus1[i],hit_score[i]);
+     }
+     for(i=0;i<nSeq;i++)
+     {
+        if(ctg_idex2[i] == 1)
+          fprintf(namef2,"%s %d %d\n",R_Name[i],hit_locus1[i],hit_score[i]);
      }
      fclose(namef);
      fclose(namef2);
-     printf("Masked reads %d %d %d\n",i,nSeq,n_uniqs);
+
+     exit(1);
 }
 
 
@@ -658,6 +627,100 @@ void ArraySort_Int2(int n, int *arr, int *brr)
      }
 }
 
+/* =============================== */
+void ArraySort_float(int n, float *arr, int *brr)
+/* =============================== */
+{
+     int i,ir=n-1,j,k,m=0,b,jstack=0,NSTACK=50,istack[NSTACK],MIN=7;
+     float a,temp;
+
+     for(;;)
+     {
+/*      Insertion sort when subarray is small enough    */
+        if(ir-m<MIN)
+        {
+          for(j=m+1;j<=ir;j++)
+          {
+             a=arr[j];
+             b=brr[j];
+             for(i=j-1;i>=m;i--)
+             {
+                if(arr[i]<=a) break;
+                arr[i+1]=arr[i];
+                brr[i+1]=brr[i];
+             }
+             arr[i+1]=a;
+             brr[i+1]=b;
+          }
+          if(!jstack) return;
+          ir=istack[jstack--];
+          m=istack[jstack--];
+        }
+        else
+        {
+          k=(m+ir)>>1;
+          SWAP(arr[k],arr[m+1]);
+          SWAP(brr[k],brr[m+1]);
+
+          if(arr[m]>arr[ir])
+          {
+            SWAP(arr[m],arr[ir]);
+            SWAP(brr[m],brr[ir]);
+          }
+
+          if(arr[m+1]>arr[ir])
+          {
+            SWAP(arr[m+1],arr[ir]);
+            SWAP(brr[m+1],brr[ir]);
+          }
+
+          if(arr[m]>arr[m+1])
+          {
+            SWAP(arr[m],arr[m+1]);
+            SWAP(brr[m],brr[m+1]);
+          }
+
+          i=m+1;
+          j=ir;
+          a=arr[m+1];
+          b=brr[m+1];
+          for(;;)
+          {
+             do i++; while (arr[i]<a);
+             do j--; while (arr[j]>a);
+             if(j<i) break;
+             SWAP(arr[i],arr[j]);
+             SWAP(brr[i],brr[j]);
+          }
+          arr[m+1]=arr[j];
+          arr[j]=a;
+          brr[m+1]=brr[j];
+          brr[j]=b;
+          jstack+=2;
+
+/*        Push pointers to larger subarray on stack      */
+/*        process smaller subarray immediately           */
+          if(jstack>NSTACK)
+          {
+             printf("Stack error: NSTACK too small\n");
+             exit(0);
+          }
+          if(ir-i+1>=j-m)
+          {
+            istack[jstack]=ir;
+            istack[jstack-1]=i;
+            ir=j-1;
+          }
+          else
+          {
+            istack[jstack]=j-1;
+            istack[jstack-1]=m;
+            m=i;
+          }
+        }
+     }
+}
+
 /*   function to sort an array into a decreasing order:  a>b>c>....    */  
 /* =============================== */
 void ArraySort2_Int2(int n, int *arr, int *brr)
@@ -665,6 +728,101 @@ void ArraySort2_Int2(int n, int *arr, int *brr)
 {
      int i,ir=n-1,j,k,m=0,jstack=0,b,NSTACK=50,istack[NSTACK];
      int a,temp,MIN=7;
+
+     for(;;)
+     {
+/*      Insertion sort when subarray is small enough    */
+        if(ir-m<MIN)
+        {
+          for(j=m+1;j<=ir;j++)
+          {
+             a=arr[j];
+             b=brr[j];
+             for(i=j-1;i>=m;i--)
+             {
+                if(arr[i]>=a) break;
+                arr[i+1]=arr[i];
+                brr[i+1]=brr[i];
+             }
+             arr[i+1]=a;
+             brr[i+1]=b;
+          }
+          if(!jstack) return;
+          ir=istack[jstack--];
+          m=istack[jstack--];
+        }
+        else
+        {
+          k=(m+ir)>>1;
+          SWAP(arr[k],arr[m+1]);
+          SWAP(brr[k],brr[m+1]);
+
+          if(arr[m]<arr[ir])
+          {
+            SWAP(arr[m],arr[ir]);
+            SWAP(brr[m],brr[ir]);
+          }
+
+          if(arr[m+1]<arr[ir])
+          {
+            SWAP(arr[m+1],arr[ir]);
+            SWAP(brr[m+1],brr[ir]);
+          }
+
+          if(arr[m]<arr[m+1])
+          {
+            SWAP(arr[m],arr[m+1]);
+            SWAP(brr[m],brr[m+1]);
+          }
+
+          i=m+1;
+          j=ir;
+          a=arr[m+1];
+          b=brr[m+1];
+          for(;;)
+          {
+             do i++; while (arr[i]>a);
+             do j--; while (arr[j]<a);
+             if(j<i) break;
+             SWAP(arr[i],arr[j]);
+             SWAP(brr[i],brr[j]);
+          }
+          arr[m+1]=arr[j];
+          arr[j]=a;
+          brr[m+1]=brr[j];
+          brr[j]=b;
+          jstack+=2;
+
+/*        Push pointers to larger subarray on stack      */
+/*        process smaller subarray immediately           */
+          if(jstack>NSTACK)
+          {
+             printf("Stack error: NSTACK too small\n");
+             exit(0);
+          }
+          if(ir-i+1>=j-m)
+          {
+            istack[jstack]=ir;
+            istack[jstack-1]=i;
+            ir=j-1;
+          }
+          else
+          {
+            istack[jstack]=j-1;
+            istack[jstack-1]=m;
+            m=i;
+          }
+        }
+     }
+}
+
+/*   function to sort an array into a decreasing order:  a>b>c>....    */  
+/* =============================== */
+void ArraySort_float2(int n, float *arr, int *brr)
+/* =============================== */
+{
+     int i,ir=n-1,j,k,m=0,b,jstack=0,NSTACK=50,istack[NSTACK],MIN=7;
+     float a,temp;
 
      for(;;)
      {
@@ -1028,4 +1186,35 @@ char    **cmatrix(long nrl,long nrh,long ncl,long nch)
         /* return pointer to array of pointers to rows   */
         return cm;
 }
+
+/* creat char matrix with subscript ange fm[nrl...nrh][ncl...nch]  */
+float   **fmatrix(long nrl,long nrh,long ncl,long nch)
+{
+        long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
+        float **fm;
+
+        /* allocate pointers to rows        */
+        if((fm=(float **)calloc(nrow,sizeof(float*)))==NULL)
+        {
+           printf("error fmatrix: calloc error No. 1 \n");
+           return(NULL);
+        }
+        fm+=0;
+        fm-=nrl;
+
+        /* allocate rows and set pointers to them        */
+        if((fm[nrl]=(float *)calloc(nrow*ncol,sizeof(float)))==NULL)
+        {
+           printf("error fmatrix: calloc error No. 2 \n");
+           return(NULL);
+        }
+        fm[nrl]+=0;
+        fm[nrl]-=nrl;
+
+        for(i=nrl+1;i<=nrh;i++)
+           fm[i]=fm[i-1]+ncol;
+        /* return pointer to array of pointers to rows   */
+        return fm;
+}
+
 

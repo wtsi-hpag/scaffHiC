@@ -178,11 +178,11 @@ else
     rm -rf $projdir/src/pigz/
 fi
 
-###### Compile scaffHiC sources ######
+###### Compile scaffhic sources ######
 
 echo; echo "Compiling scaffHiC sources"
 
-srcs=( scaffHiC scaffHiC_agp2AGP scaffHiC_AGPbuild scaffHiC_cover scaffHiC_ctg2AGP scaffHiC_fastq scaffHiC_insert scaffHiC_lengthdis scaffHiC_motif1 scaffHiC_motif2 scaffHiC_motifm scaffHiC_motreads scaffHiC_offset scaffHiC_orient scaffHiC_output scaffHiC_pairs scaffHiC_pairs2 scaffHiC_pairs-chr scaffHiC_pairs-cov scaffHiC_pairs-map scaffHiC_PCRdup2 scaffHiC_PCRdup3 scaffHiC_PCRdup scaffHiC_pmatrix scaffHiC_proPair scaffHiC_RDplace scaffHiC_reads scaffHiC_rename scaffHiC_scaffsort scaffHiC_scf2agp scaffHiC_scf2scf scaffHiC_screen scaffHiC_screen-cover scaffHiC_translo scaffHiC_translo-chr)
+srcs=( scaffHiC_screen scaffHiC_output scaffHiC_fastq scaffHiC_rename scaffHiC_outbreak scaffHiC_superAGP scaffhic breakhic scaffHiC_PCRdup scaffHiC_PCRdup2 scaffHiC_PCRdup3 scaffHiC_RDplace scaffHiC_proPair scaffHiC_AGPbuild scaffHiC_pmatrix scaffHiC_insert scaffHiC_lengthdis scaffHiC_orient scaffHiC_scf2agp scaffHiC_break scaffHiC_breakClean scaffHiC_BKplace scaffHiC_BKplace2 scaffHiC_CIplace scaffHiC_scf2scf scaffHiC_getPair scaffHiC_breakPair scaffHiC_breakPair2 scaffHiC_breakAGP scaffHiC_breakTags scaffHiC_reads scaffHiC_screen-cover scaffHiC_translo scaffHiC_translo-chr)
 
 cd $projdir/src
 make &> $projdir/src/log/sources_compilation.log

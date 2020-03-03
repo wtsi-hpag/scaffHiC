@@ -303,7 +303,7 @@ int main(int argc, char **argv)
        }
        else
          strcpy(R_Name[i],S0_Name[i]);
-       printf("Name: %d %s\n",i,R_Name[i]); 
+//       printf("Name: %d %s\n",i,R_Name[i]); 
     }
 /*  input read alignment info line   */
     if((fpOutfast = fopen(argv[args+3],"w")) == NULL)

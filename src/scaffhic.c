@@ -1097,7 +1097,10 @@ int main(int argc, char **argv)
       }
 
       memset(syscmd,'\0',2000);
-      sprintf(syscmd,"%s/scaffHiC_scf2agp genome6.scf tarseq.tag genome-final.agp > try.out",bindir);
+      if(break_tag == 1)
+        sprintf(syscmd,"%s/scaffHiC_scf2agp genome6.scf tarseq.tag tarseq0.tag genome-final.agp > try.out",bindir);
+      else 
+        sprintf(syscmd,"%s/scaffHiC_scf2agp genome6.scf tarseq.tag tarseq.tag genome-final.agp > try.out",bindir);
       if(system(syscmd) == -1)
       {
         printf("System command error:\n");

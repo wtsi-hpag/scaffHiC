@@ -46,7 +46,7 @@
 #define PADCHAR '-'
 #define Max_N_NameBase 50
 #define Max_N_Pair 100
-static char **S_Name;
+static char **S_Name,**S0_Name,**R_Name;
 static int *ctg_index,*ctg_rcdex,*ctg_list,*ctg_head,*ctg_id2id;
 static int *ctg_sfdex,*ctg_length,*ctg_mscore,*ctg_scflen,*ctg_gaplen;
 static int IMOD = 10;
@@ -70,18 +70,18 @@ int main(int argc, char **argv)
     FILE *fp,*namef,*fpOutfast,*fpOutfast2;
     int i,j,k,nSeq,args,i_contig,idt,stopflag,num_hit,n_scaff,rcdex;
     char *st,*ed,RC[2]={0};
-    char line[2000]={0},ctgnameout[Max_N_NameBase],tmptext[Max_N_NameBase],temp2[Max_N_NameBase];
+    char line[2000]={0},ctgname[60],tmptext[Max_N_NameBase],temp2[Max_N_NameBase];
     char **cmatrix(B64_long nrl,B64_long nrh,B64_long ncl,B64_long nch);
     fasta *seq,*seq2; 
     void ArraySort_Mix(int n, B64_long *arr, int *brr);
     void Read_Pairs(char **argv,int args,int nLib,int nSeq);
     void Align_Process(char **argv,int args,int nRead);
     void Cigar_Filter(char **argv,int args,int nRead);
-    int n_contig,n_contig1,n_contig2,offset,start,nRead;
+    int n_contig,n_contig1,n_contig2,offset,start,nRead,nRead0;
 
     if(argc < 2)
     {
-      printf("Usage: %s <AGP_stage1> <AGP_stage2> <Tag_file> <Mgered_AGP>\n",argv[0]);
+      printf("Usage: %s <SCF_stage1> <Tag0_file> <Tag1_file> <Merged_AGP>\n",argv[0]);
       exit(1);
     }
 
@@ -239,6 +239,7 @@ int main(int argc, char **argv)
     fclose(namef);
 
     S_Name=cmatrix(0,nRead+10,0,Max_N_NameBase);
+    R_Name=cmatrix(0,nRead+10,0,Max_N_NameBase);
 
     if((namef = fopen(argv[args+1],"r")) == NULL)
     {
@@ -254,10 +255,58 @@ int main(int argc, char **argv)
     }
     fclose(namef);
 
+    nRead0=0;
+    if((namef = fopen(argv[args+2],"r")) == NULL)
+    {
+      printf("ERROR main:: args+1 \n");
+      exit(1);
+    }
+    while(!feof(namef))
+    {
+       if(fgets(line,2000,namef) == NULL)
+      {
+//        printf("fgets command error:\n);
+      }
+      if(feof(namef)) break;
+      nRead0++;
+    }
+    fclose(namef);
 
-    printf("num3: %d %d\n",num_hit,n_contig1);
+    S0_Name=cmatrix(0,nRead0+10,0,Max_N_NameBase);
+
+    if((namef = fopen(argv[args+2],"r")) == NULL)
+    {
+      printf("ERROR main:: reads group file \n");
+      exit(1);
+    }
+
+/*  read the alignment files         */
+    i=0;
+    while(fscanf(namef,"%s %s %s %s",temp2,temp2,temp2,S0_Name[i])!=EOF)
+    {
+        i++;
+    }
+    fclose(namef);
+
+    for(i=0;i<nRead;i++)
+    {
+       int idi;
+       ed = strrchr(S_Name[i],'_');
+       if(strncmp(ed+1,"break",5) == 0)
+       {
+        
+         st = strchr(S_Name[i],'_');
+         strncpy(ctgname,st+1,ed-st);
+         idi = atoi(ctgname);
+         strcpy(R_Name[i],S0_Name[idi]);
+         strcat(R_Name[i],ed);
+       }
+       else
+         strcpy(R_Name[i],S0_Name[i]);
+       printf("Name: %d %s\n",i,R_Name[i]); 
+    }
 /*  input read alignment info line   */
-    if((fpOutfast = fopen(argv[args+2],"w")) == NULL)
+    if((fpOutfast = fopen(argv[args+3],"w")) == NULL)
     {
       printf("ERROR main:: reads group file: %s \n",argv[args]);
       exit(1);
@@ -281,7 +330,7 @@ int main(int argc, char **argv)
           else
             RC[0] = '-'; 
 //          printf("scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',S_Name[ctg_id2id[idd1]],1,ctg_length[idd1],RC);
-          fprintf(fpOutfast,"scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',S_Name[ctg_index[idd]],1,ctg_length[idd],RC);
+          fprintf(fpOutfast,"scaffHiC_%d\t%d\t%d\t%d\t%c\t%s\t%d\t%d\t%s\n",n_scaff,start+1,offset,i_contig,'W',R_Name[ctg_index[idd]],1,ctg_length[idd],RC);
           i_contig++;
           if(j < (ctg_list[i]-1))
           {

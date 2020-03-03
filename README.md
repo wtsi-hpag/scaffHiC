@@ -138,4 +138,15 @@ Break2: 118 69709038 76603601 116 60 200  \
 6 - Break likelihood value QV; \
 7 - Breakpoint nature: contig break (0); scaffold break or break at a gap (200) \
  
+#### Multiple paired-end fastq files 
+    If you have multiple paired-end fastq files   \
+    read1_1.fq.gz read2_1.fq.gz read3_1.fq.gz     \
+    read1_2.fq.gz read2_2.fq.gz read3_2.fq.gz     \
 
+    You need to do                                \
+    cat read1_1.fq.gz read2_1.fq.gz read3_1.fq.gz > read_1.fq.gz \
+    cat read1_2.fq.gz read2_2.fq.gz read3_2.fq.gz > read_2.fq.gz \ 
+
+    The final used files are read_1.fq.gz read_2.fq.gz           \
+
+ 

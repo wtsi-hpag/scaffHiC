@@ -371,7 +371,7 @@ void Matrix_Process(char **argv,int args,int nSeq)
                }   
              }
              if((print2_tag)&&(j%grid_len==0))
-               printf("Cov-all: %d %d %d %ld\n",j,cov_genome[j],set_cover,ave_cover);
+               printf("Cov-all: %d %d %d %d %ld\n",i,j,cov_genome[j],set_cover,ave_cover);
           }
 
           n_breaks = 0;

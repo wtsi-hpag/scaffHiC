@@ -59,6 +59,7 @@ static int edge_flag=0;
 static int mpscore=20;
 static int nContig=0;
 static int gap_len = 100;
+static int gap_len0 = 100;
 static int max_len = 100000;
 typedef struct
 {
@@ -319,6 +320,7 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
            {
              breakflag++;
              break_masks[n] = 0;
+       printf("www1: %d %d %d %d %d\n",n,breakflag,num_hits,break_locus[n],break_locus2[n]);
            }
            else
              break_masks[n] = 2;
@@ -338,7 +340,7 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
                  if((break_tags[n+1]==0)&&(abs(break_locus[n+1]-break_locus[n])<dif_offset))
                  {
        printf("Filter1: %d %d %d\n",n,break_locus[n],break_locus2[n]);
-                   if(break_gaplen[n+1] == gap_len)
+                   if((break_gaplen[n+1] == gap_len)||(break_gaplen[n+1] == gap_len0))
                      break_masks[n] = 1;
                    else
                      break_masks[n] = 2;
@@ -350,7 +352,7 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
                  if((break_tags[j-2]==0)&&(abs(break_locus[j-2]-break_locus[n])<dif_offset))
                  {
        printf("Filter2: %d %d %d\n",n,break_locus[n],break_locus2[n]);
-                   if(break_gaplen[j-2] == gap_len)
+                   if((break_gaplen[j-2] == gap_len)||(break_gaplen[j-2] == gap_len0))
                      break_masks[n] = 1;
                    else
                      break_masks[n] = 2;
@@ -369,7 +371,7 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
                    if((break_tags[n+1]==0)&&(abs(break_locus[n+1]-break_locus[n])<dif_offset))
                    {
        printf("Filter3: %d %d %d %d\n",n,break_locus[n],break_locus[n+1],gap_len);
-                     if(break_gaplen[n+1] == gap_len)
+                     if((break_gaplen[n+1] == gap_len)||(break_gaplen[n+1] == gap_len0))
                        break_masks[n] = 1;
                      else
                        break_masks[n] = 2;
@@ -381,7 +383,7 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
                    if((break_tags[n-1]==0)&&(abs(break_locus[n]-break_locus[n-1])<dif_offset))
                    {
        printf("Filter4: %d %d %d %d\n",n,break_locus[n],break_locus[n-1],gap_len);
-                     if(break_gaplen[n-1] == gap_len)
+                     if((break_gaplen[n-1] == gap_len)||(break_gaplen[n-1] == gap_len0))
                        break_masks[n] = 1;
                      else
                        break_masks[n] = 2;

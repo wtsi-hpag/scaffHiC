@@ -1196,7 +1196,7 @@ int main(int argc, char **argv)
       }
 
       memset(syscmd,'\0',2000);
-      sprintf(syscmd,"sh %s/plot-hic-length.sh",bindir);
+      sprintf(syscmd,"bash %s/plot-hic-length.sh",bindir);
       if(system(syscmd) == -1)
       {
         printf("System command error:\n");

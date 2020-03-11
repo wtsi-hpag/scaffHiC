@@ -226,13 +226,13 @@ void Mapping_Process(char **argv,int args,int n_Breaks)
         int covermin = ctg_covermin[i];
         int coverave = ctg_coverave[i];
         int rat = 0;
+        float rat1,rat2;
 
-        if(covermin == 0)
-          covermin = 1;
-
-        rat = coverave/covermin;
-        if(rat > 60)
-          rat = 60;
+        rat1 = covermin;
+        rat1 = rat1/coverave;
+        rat1 = 1.0 - rat1;
+        rat2 = pow(rat1,10);
+        rat = 60*rat2;
         fprintf(namef,"Break: %d %d %d %d %d\n",break_index[i],break_locus[i],ctg_length[i],ctg_covermin[i],rat);
      }
      fclose(namef);

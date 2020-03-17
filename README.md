@@ -1,5 +1,7 @@
 # scaffhic v1.1
-Pipeline for genome scaffolding by modelling distributions of HiC pairs. Also breakhic is added to the pipeline.
+scaffhic - Pipeline for genome scaffolding by modelling distributions of HiC pairs.
+
+breakhic - Identification of assembly breakpoints by screening paired HiC reads.
 
 Pipeline steps:
         

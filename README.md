@@ -152,4 +152,7 @@ Break2: 118 69709038 76603601 116 60 200  \
 
     The final used files are read_1.fq.gz read_2.fq.gz           \
 
- 
+#### scaffhic and breakhic
+    breakhic has been implemented into scaffhic and no need to run breakhic separately  \
+    breakhic might be useful when you run it before other scaffolding tools such as SALSA or 3dDNA \ 
+     

@@ -67,7 +67,7 @@ static int run_align = 1;
 static int sam_flag = 1;
 static int map_view = 0;
 static int hic_plot = 0;
-static int n_len = 200000;
+static int trace_tag = 0;
 static int min_len = 3000;
 
 typedef struct
@@ -107,8 +107,11 @@ int main(int argc, char **argv)
     
     if(argc < 2)
     {
-         printf("Usage: %s -nodes 30 -fq1 Input_read_1 -fq2 Input_read_2 <input_assembly_fasta/q_file> <Output_scaffold_file>\n",argv[0]);
+         printf("Usage: %s -nodes 30 -grid 100 -break 1 -fq1 Input_read_1 -fq2 Input_read_2 <input_assembly_fasta/q_file> <Output_scaffold_file>\n",argv[0]);
          printf("     nodes  (30)     - Number of CPUs requested\n");
+         printf("     grid   (100)    - Grid size to search breakpoints\n");
+         printf("     break  (1)      - Assembly breaking code\n");
+         printf("             0 - no break; 1 - break on contigs and scaffolds; 2 - contig break only\n");
          printf("     fq1             - Input fastq read_1\n");
          printf("     fq2             - Input fastq read_2\n");
          exit(1);
@@ -179,9 +182,9 @@ int main(int argc, char **argv)
          sscanf(argv[++i],"%d",&mscore);
          args=args+2;
        }
-       else if(!strcmp(argv[i],"-length"))
+       else if(!strcmp(argv[i],"-trace"))
        {
-         sscanf(argv[++i],"%d",&n_len);
+         sscanf(argv[++i],"%d",&trace_tag);
          args=args+2;
        }
        else if(!strcmp(argv[i],"-depth"))
@@ -218,8 +221,11 @@ int main(int argc, char **argv)
        }
        else if(!strcmp(argv[i],"-help"))
        {
-         printf("Usage: %s -nodes 30 -fq1 Input_read_1 -fq2 Input_read_2 <input_assembly_fasta/q_file> <Output_scaffold_file>\n",argv[0]);
+         printf("Usage: %s -nodes 30 -grid 100 -break 1 -fq1 Input_read_1 -fq2 Input_read_2 <input_assembly_fasta/q_file> <Output_scaffold_file>\n",argv[0]);
          printf("       nodes  (30)  - Number of CPUs requested\n");
+         printf("       grid   (100) - Grid size to search breakpoints\n");
+         printf("       break  (1)      - Assembly breaking code\n");
+         printf("               0 - no break; 1 - break on contigs and scaffolds; 2 - contig break only\n");
          printf("       fq1          - Input fastq read_1\n");
          printf("       fq2          - Input fastq read_2\n");
          exit(1);
@@ -439,7 +445,7 @@ int main(int argc, char **argv)
     }
 
 
-      if(break_tag == 1)
+      if(break_tag >= 1)
       {
         memset(syscmd,'\0',2000);
         sprintf(syscmd,"mv align.dat align0.dat");
@@ -524,7 +530,7 @@ int main(int argc, char **argv)
         }
 
         memset(syscmd,'\0',2000);
-        printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir,gap_len);
+        printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
         sprintf(syscmd,"%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
         if(system(syscmd) == -1)
         {
@@ -532,20 +538,38 @@ int main(int argc, char **argv)
         }
 
         memset(syscmd,'\0',2000);
-        printf("%s/scaffHiC_outbreak tarseq0.fastq break-all.clean break.fastq > try.out",bindir);
-        sprintf(syscmd,"%s/scaffHiC_outbreak tarseq0.fastq break-all.clean break.fastq > try.out",bindir);
+        sprintf(syscmd,"egrep Break1: break-all.clean > break-ctg.clean");
         if(system(syscmd) == -1)
         {
           printf("System command error:\n");
         }
 
         memset(syscmd,'\0',2000);
-        printf("%s/scaffHiC_BKplace align0.dat break-all.tags align.dat > try.out",bindir);
-        sprintf(syscmd,"%s/scaffHiC_BKplace align0.dat break-all.tags align.dat > try.out",bindir);
+        printf("%s/scaffHiC_outbreak tarseq0.fastq break-all.clean break.fastq > try.out",bindir);
+	if(break_tag == 1)
+          sprintf(syscmd,"%s/scaffHiC_outbreak tarseq0.fastq break-all.clean break.fastq > try.out",bindir);
+	else if(break_tag == 2)
+          sprintf(syscmd,"%s/scaffHiC_outbreak tarseq0.fastq break-ctg.clean break.fastq > try.out",bindir);
+        else
+	{
+          sprintf(syscmd,"cp tarseq0.fastq break.fastq");
+          printf("Input correct break code: 1 or 2?\n");
+	}
         if(system(syscmd) == -1)
         {
           printf("System command error:\n");
         }
+
+	if(trace_tag == 1)
+	{
+          memset(syscmd,'\0',2000);
+          printf("%s/scaffHiC_BKplace align0.dat break-all.tags align.dat > try.out",bindir);
+          sprintf(syscmd,"%s/scaffHiC_BKplace align0.dat break-all.tags align.dat > try.out",bindir);
+          if(system(syscmd) == -1)
+          {
+            printf("System command error:\n");
+          }
+	}
       }
 
     memset(syscmd,'\0',2000);
@@ -568,14 +592,6 @@ int main(int argc, char **argv)
     {
         printf("System command error:\n");
     }
-/*
-    memset(syscmd,'\0',2000);
-    sprintf(syscmd,"mv break-all.name %s",file_break);
-    if(system(syscmd) == -1)
-    {
-//      printf("System command error:\n);
-    }
-            */
 
     if(n_debug == 0)
     {

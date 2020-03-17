@@ -547,7 +547,7 @@ int main(int argc, char **argv)
         }
 
         memset(syscmd,'\0',2000);
-        printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir,gap_len);
+        printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
         sprintf(syscmd,"%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
         if(system(syscmd) == -1)
         {
@@ -723,7 +723,7 @@ int main(int argc, char **argv)
       }
 
       memset(syscmd,'\0',2000);
-      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir,gap_len);
+      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
       sprintf(syscmd,"%s/scaffHiC_breakTags break-g2-all.clean tarseq.tag break-g2-all.tags > try.out",bindir);
       if(system(syscmd) == -1)
       {
@@ -945,7 +945,7 @@ int main(int argc, char **argv)
       }
 
       memset(syscmd,'\0',2000);
-      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir,gap_len);
+      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
       sprintf(syscmd,"%s/scaffHiC_breakTags break-g4-all.clean tarseq.tag break-g4-all.tags > try.out",bindir);
       if(system(syscmd) == -1)
       {
@@ -1058,7 +1058,7 @@ int main(int argc, char **argv)
       }
 
       memset(syscmd,'\0',2000);
-      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir,gap_len);
+      printf("%s/scaffHiC_breakTags break-all.clean tarseq0.tag break-all.tags > try.out",bindir);
       sprintf(syscmd,"%s/scaffHiC_breakTags break-g5-all.clean tarseq.tag break-g5-all.tags > try.out",bindir);
       if(system(syscmd) == -1)
       {

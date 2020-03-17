@@ -8,7 +8,7 @@
 
 static int *nn;
 
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     int i=0,j=0,k,len=0,num_steps,args,max_len;
     int *s_len,*s_hits,BAR = 0,nstep = 0,stopflag;
@@ -102,6 +102,7 @@ main(int argc, char **argv)
        if(s_hits[i] >= 10)
          fprintf(namef2,"%d %f\n",i*100+1,rate);
     }
+    return EXIT_SUCCESS;
 }
 
 

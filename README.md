@@ -97,16 +97,17 @@ The HiC map viewer PretextView (https://github.com/wtsi-hpag/PretextView) is dow
           $ ./PretextView genome-hic.map
 
 #### Run breakhic to identify assembly breakpoints 
-           $ /full/path/to/scaffhic/src/breakhic -nodes <nodes> -grid <grid size> \
+           $ /full/path/to/scaffhic/src/breakhic -nodes <nodes> -grid <grid size> -break <break code> \
                  -fq1 Input_read_1 -fq2 Input_read_2 draft-assembly.fasta break-hic.fasta \
            
                Parameters:
              nodes:        number of CPUs requested  [ default = 30 ]
              grid:         grid size to search breakpoints, the smaller, the more CPU time [ default = 100 ]
+             break:        break code: 0 - no break; 1 - break on contigs and scaffolds; 2 - contig break only [ default = 1 ]
 
 #### Run breakhic on new parameter settings with alignment file align.dat:
            $ /full/path/to/scaffhic/src/breakhic -nodes <nodes> -grid <grid size> \
-                 -data /full/path/to/tmp_rununik_27152/align.dat  \
+                 -break <break code> -data /full/path/to/tmp_rununik_27152/align.dat  \
                  draft-assembly.fasta break-hic.fasta \
           
            This saves alignment time and can get the results quickly. 
